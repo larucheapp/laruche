@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roue de la Fortune - La Ruche</title>
+  <meta name="description" content="Créez une roue de la fortune personnalisée pour vos vidéos et tirages au sort. Un outil simple, visuel et parfait pour le spectacle !">
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px;
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:center; justify-content:center;
+      padding:48px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+    .form-group{display:flex; flex-direction:column; gap:8px}
+    .form-label{font-weight:500; color:var(--color-text-primary)}
+    .form-input{
+      width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      font-size:1rem; color:var(--color-text-primary); background:var(--color-bg);
+      transition:border-color .2s, box-shadow .2s;
+    }
+    .form-input:focus{outline:none; border-color:var(--color-violet); box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+    
+    .checkbox-group { display: flex; align-items: center; gap: 10px; user-select: none; }
+    .checkbox-group input { width: 1.25em; height: 1.25em; accent-color: var(--color-violet); }
+    .checkbox-group label { font-weight: 500; cursor: pointer; }
+
+    .actions{display:flex; justify-content:flex-end; gap:12px}
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:500; padding:10px 16px; border-radius:var(--radius-md); border:none; cursor:pointer;
+      transition:background-color .2s, box-shadow .2s, transform .1s; font-size:1rem;
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn:active { transform: scale(0.98); }
+    .btn-primary{background:var(--color-violet); color:#fff; padding: 12px 24px;}
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark)}
+    .btn:disabled{background:#A78BFA; cursor:not-allowed; opacity: 0.7;}
+
+    /* ===== NEW SETUP STYLES ===== */
+    .setup-grid { display: grid; grid-template-columns: 1fr 280px; gap: 32px; align-items: flex-start; }
+    .options-panel, .preview-panel { display: flex; flex-direction: column; gap: 16px; }
+    .options-list { display: flex; flex-direction: column; gap: 12px; max-height: 300px; overflow-y: auto; padding-right: 8px;}
+    .option-item { display: flex; align-items: center; gap: 8px; }
+    .option-item .form-input { flex-grow: 1; }
+    .remove-btn {
+      flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--color-border);
+      background: var(--color-bg-alt); color: var(--color-text-secondary); font-size: 1.2rem; line-height: 1;
+      cursor: pointer; transition: background-color 0.2s, color 0.2s;
+    }
+    .remove-btn:hover { background: #FEE2E2; color: #DC2626; border-color: #FCA5A5; }
+    #add-option-btn { justify-content: center; background-color: var(--color-bg-alt); border: 1px solid var(--color-border); color: var(--color-text-primary); }
+    #add-option-btn:hover { background-color: #F0F1F3; }
+    .preview-panel { text-align: center; }
+    #preview-canvas { max-width: 100%; height: auto; border: 1px solid var(--color-border); border-radius: 50%; }
+
+    /* ===== VIDEO MODE STYLES ===== */
+    #video-mode-overlay {
+      position: fixed; inset: 0; background-color: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(10px); z-index: 100;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      padding: 20px; opacity: 0; transition: opacity 0.3s ease;
+    }
+    #video-mode-overlay.visible { display: flex; opacity: 1; }
+
+    .wheel-container { position: relative; width: 500px; height: 500px; max-width: 90vw; max-height: 90vw; }
+    #wheel-canvas { width: 100%; height: 100%; }
+    .wheel-container::after { /* The pointer */
+      content: '';
+      position: absolute; top: 50%; right: -20px; transform: translateY(-50%);
+      width: 0; height: 0;
+      border-top: 20px solid transparent;
+      border-bottom: 20px solid transparent;
+      border-left: 30px solid var(--color-violet);
+      filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.1));
+    }
+    
+    #spin-btn {
+        margin-top: 40px; font-size: 1.5rem; padding: 16px 48px;
+        box-shadow: 0 4px 20px -5px rgba(124,58,237,.5);
+    }
+    
+    #result-display {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      text-align: center;
+      font-size: 6rem; font-weight: 700; color: var(--color-violet-dark);
+      pointer-events: none;
+    }
+    #result-display .text { transform: scale(0); opacity: 0; }
+    #result-display .text.show { animation: popIn 0.8s cubic-bezier(0.68, -0.55, 0.27, 1.55) forwards; }
+    #result-display .countdown { animation: countdownAnim 1s ease-out forwards; }
+
+    #close-video-mode {
+        position: absolute; top: 20px; right: 20px;
+        background: var(--color-bg-alt); color: var(--color-text-secondary);
+        border: 1px solid var(--color-border); border-radius: 50%;
+        width: 44px; height: 44px; font-size: 24px;
+        line-height: 1; cursor: pointer;
+    }
+
+    @keyframes popIn {
+      0% { transform: scale(0); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    @keyframes countdownAnim {
+      0% { opacity: 0; transform: scale(1.5); }
+      50% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(0.5); }
+    }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="wide">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Roue de la Fortune</h1>
+      <div id="setup-card" class="generator-card" role="region" aria-label="Configuration de la roue">
+        
+        <div class="setup-grid">
+          <div class="options-panel">
+            <label class="form-label">Options à tirer</label>
+            <div id="options-list"></div>
+            <button id="add-option-btn" class="btn">+</button>
+          </div>
+          <div class="preview-panel">
+            <label class="form-label">Aperçu</label>
+            <canvas id="preview-canvas" width="250" height="250"></canvas>
+          </div>
+        </div>
+
+        <div class="checkbox-group">
+          <input type="checkbox" id="remove-on-win" checked>
+          <label for="remove-on-win">Retirer le mot après chaque tirage</label>
+        </div>
+        <div class="actions">
+          <button id="launch-btn" class="btn btn-primary">Lancer la Roue !</button>
+        </div>
+      </div>
+    </div>
+  </main>
+  
+  <div id="video-mode-overlay">
+    <button id="close-video-mode" title="Retour à la configuration">&times;</button>
+    <div class="wheel-container">
+        <canvas id="wheel-canvas" width="500" height="500"></canvas>
+    </div>
+    <div id="result-display"></div>
+    <button id="spin-btn" class="btn btn-primary">TOURNER !</button>
+  </div>
+
+  <script>
+    // Background hex grid
+    (function(){
+      const c = document.getElementById('bg-canvas'); if(!c) return;
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect(); c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,rect.width,rect.height);
+        const size=24,hexW=2*size,hexH=Math.sqrt(3)*size,stepX=hexW*3/4;
+        ctx.strokeStyle='rgba(124,58,237,0.10)'; ctx.lineWidth=1;
+        for(let r=0;r*hexH<rect.height+hexH;r++) for(let col=0;col*stepX<rect.width+hexW;col++){
+          const x=col*stepX, y=r*hexH+(col%2?hexH/2:0);
+          ctx.beginPath();
+          for(let i=0;i<6;i++){ const a=2*Math.PI/6*i,px=x+size*Math.cos(a),py=y+size*Math.sin(a); if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py); }
+          ctx.closePath(); ctx.stroke();
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true}); draw();
+    })();
+  </script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const launchBtn = document.getElementById('launch-btn');
+      const closeBtn = document.getElementById('close-video-mode');
+      const spinBtn = document.getElementById('spin-btn');
+      const overlay = document.getElementById('video-mode-overlay');
+      const removeOnWinCheckbox = document.getElementById('remove-on-win');
+      const wheelCanvas = document.getElementById('wheel-canvas');
+      const resultDisplay = document.getElementById('result-display');
+      const wheelCtx = wheelCanvas.getContext('2d');
+
+      // New setup elements
+      const optionsList = document.getElementById('options-list');
+      const addOptionBtn = document.getElementById('add-option-btn');
+      const previewCanvas = document.getElementById('preview-canvas');
+      const previewCtx = previewCanvas.getContext('2d');
+
+      let options = [];
+      let currentAngle = 0;
+      let isSpinning = false;
+      
+      const colors = ["#8B5CF6", "#EC4899", "#34D399", "#F59E0B", "#60A5FA", "#EF4444", "#A78BFA", "#F472B6", "#6EE7B7", "#FBBF24"];
+
+      const drawGenericWheel = (ctx, canvas, angleOffset, currentOptions, fontSize) => {
+        const numOptions = currentOptions.length;
+        const radius = canvas.width / 2;
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (numOptions === 0) {
+          ctx.fillStyle = '#f0f0f0';
+          ctx.beginPath();
+          ctx.arc(radius, radius, radius, 0, 2 * Math.PI);
+          ctx.fill();
+          return;
+        }
+        
+        const arcSize = 2 * Math.PI / numOptions;
+        
+        ctx.save();
+        ctx.translate(radius, radius);
+        ctx.rotate(angleOffset);
+        
+        currentOptions.forEach((option, i) => {
+            const angle = i * arcSize;
+            ctx.beginPath();
+            ctx.fillStyle = colors[i % colors.length];
+            ctx.moveTo(0, 0);
+            ctx.arc(0, 0, radius - 5, angle, angle + arcSize, false);
+            ctx.lineTo(0, 0);
+            ctx.fill();
+            
+            ctx.save();
+            ctx.fillStyle = "#fff";
+            ctx.font = `bold ${fontSize}px Inter, sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.rotate(angle + arcSize / 2);
+            const text = option.length > 15 ? option.substring(0, 13) + '...' : option;
+            ctx.fillText(text, radius * 0.6, 0);
+            ctx.restore();
+        });
+        ctx.restore();
+      };
+      
+      const drawWheel = () => drawGenericWheel(wheelCtx, wheelCanvas, currentAngle, options, 16);
+      const drawPreviewWheel = () => drawGenericWheel(previewCtx, previewCanvas, 0, options, 10);
+
+      const updateOptionsAndPreview = () => {
+        const optionInputs = optionsList.querySelectorAll('.form-input');
+        options = Array.from(optionInputs).map(input => input.value.trim()).filter(Boolean);
+        launchBtn.disabled = options.length < 2;
+        drawPreviewWheel();
+      };
+
+      const createOptionInput = () => {
+        const item = document.createElement('div');
+        item.className = 'option-item';
+        
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'form-input';
+        input.placeholder = `Option ${optionsList.children.length + 1}`;
+        input.addEventListener('input', updateOptionsAndPreview);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-btn';
+        removeBtn.innerHTML = '&times;';
+        removeBtn.ariaLabel = 'Supprimer l\'option';
+        removeBtn.addEventListener('click', () => {
+          item.remove();
+          updateOptionsAndPreview();
+        });
+
+        item.appendChild(input);
+        item.appendChild(removeBtn);
+        optionsList.appendChild(item);
+        input.focus();
+      };
+
+      addOptionBtn.addEventListener('click', createOptionInput);
+      
+      const showResult = (result) => {
+          const resultEl = document.createElement('div');
+          resultEl.className = 'text';
+          resultEl.textContent = result;
+          resultDisplay.innerHTML = '';
+          resultDisplay.appendChild(resultEl);
+          void resultEl.offsetWidth;
+          resultEl.classList.add('show');
+      };
+
+      const startSpin = () => {
+          if (isSpinning || options.length < 2) return;
+          isSpinning = true;
+          spinBtn.disabled = true;
+          resultDisplay.innerHTML = '';
+
+          const spinTime = 8000;
+          const randomSpin = Math.random() * 2 * Math.PI;
+          const totalRotation = 10 * 2 * Math.PI + randomSpin;
+          let start = null;
+          const easeOutCubic = t => 1 - Math.pow(1 - t, 4);
+
+          const animate = (timestamp) => {
+              if (!start) start = timestamp;
+              const progress = timestamp - start;
+              const t = Math.min(progress / spinTime, 1);
+              const easedT = easeOutCubic(t);
+
+              currentAngle = easedT * totalRotation;
+              drawWheel();
+              
+              if (progress < spinTime) {
+                  requestAnimationFrame(animate);
+              } else {
+                  const numOptions = options.length;
+                  const finalAngle = currentAngle % (2 * Math.PI);
+                  const winningIndex = Math.floor(numOptions - (finalAngle / (2 * Math.PI)) * numOptions) % numOptions;
+                  const winner = options[winningIndex];
+                  
+                  showResult(winner);
+                  
+                  if (removeOnWinCheckbox.checked) {
+                      const winningValue = options[winningIndex];
+                      options.splice(winningIndex, 1);
+                      // also remove from the setup view
+                      const allInputs = optionsList.querySelectorAll('.form-input');
+                      const inputToRemove = Array.from(allInputs).find(input => input.value.trim() === winningValue);
+                      if(inputToRemove) inputToRemove.closest('.option-item').remove();
+                      
+                      setTimeout(() => {
+                          currentAngle = 0;
+                          drawWheel();
+                          drawPreviewWheel();
+                      }, 1500);
+                  }
+                  
+                  isSpinning = false;
+                  spinBtn.disabled = (options.length < 2);
+              }
+          };
+          requestAnimationFrame(animate);
+      };
+
+      const runCountdown = () => {
+        spinBtn.disabled = true;
+        let count = 3;
+        const countdown = () => {
+            if (count > 0) {
+                const countEl = document.createElement('div');
+                countEl.className = 'countdown';
+                countEl.textContent = count;
+                resultDisplay.innerHTML = '';
+                resultDisplay.appendChild(countEl);
+                count--;
+                setTimeout(countdown, 1000);
+            } else {
+                resultDisplay.innerHTML = '';
+                startSpin();
+            }
+        };
+        countdown();
+      };
+
+      launchBtn.addEventListener('click', () => {
+        if (options.length < 2) {
+            alert('Veuillez entrer au moins 2 options pour la roue.');
+            return;
+        }
+        currentAngle = 0;
+        spinBtn.disabled = false;
+        resultDisplay.innerHTML = '';
+        drawWheel();
+        overlay.classList.add('visible');
+      });
+
+      closeBtn.addEventListener('click', () => {
+        overlay.classList.remove('visible');
+      });
+
+      spinBtn.addEventListener('click', runCountdown);
+      
+      // Initial state
+      for(let i=0; i<3; i++) createOptionInput();
+      updateOptionsAndPreview();
+    });
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

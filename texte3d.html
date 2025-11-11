@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Générateur de Texte 3D — La Ruche</title>
+  <meta name="description" content="Créez des textes avec un effet 3D stylisé et exportez-les en PNG avec fond transparent.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Alfa+Slab+One&family=Anton&family=Bangers&family=Black+Ops+One&family=Bungee&family=Changa+One&family=Exo+2:wght@800&family=Graduate&family=Kanit:wght@700&family=Knewave&family=Luckiest+Guy&family=Montserrat:wght@700&family=Oswald:wght@700&family=Passion+One:wght@700&family=Paytone+One&family=Permanent+Marker&family=Poppins:wght@700&family=Press+Start+2P&family=Righteous&family=Russo+One&family=Shrikhand&family=Space+Grotesk:wght@700&family=Staatliches&family=Titan+One&family=Ultra&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --color-bg: #FFFFFF;
+      --color-bg-alt: #F7F8FA;
+      --color-border: #E9EAF0;
+      --color-text-primary: #141417;
+      --color-text-secondary: #6B7280;
+      --color-violet: #7C3AED;
+      --color-violet-dark: #6D28D9;
+      --radius-md: 12px;
+      --radius-lg: 14px;
+      --tool-max-w: 480px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; background-color: var(--color-bg); }
+    body {
+      height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--color-text-primary); line-height: 1.5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    body[data-size="default"] { --tool-max-w: 480px; }
+    body[data-size="wide"] { --tool-max-w: 960px; }
+    body[data-size="xl"] { --tool-max-w: 1200px; }
+
+    #bg-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; }
+
+    .app-header {
+      flex-shrink: 0; background: var(--color-bg-alt); border-bottom: 1px solid var(--color-border);
+      padding: 0 24px; display: flex; align-items: center; height: 70px;
+    }
+    .app-header a { display: inline-flex; align-items: center; }
+    .logo-img { height: 70px; width: auto; vertical-align: middle; }
+
+    .main-content {
+      flex-grow: 1; display: flex; align-items: flex-start; justify-content: center;
+      padding: 24px 24px; overflow-y: auto;
+    }
+    .tool-wrapper { display: flex; flex-direction: column; align-items: center; position: relative; width: 100%; }
+    .tool-title {
+      font-size: 1.75rem; font-weight: 600; padding: 12px 28px;
+      background: linear-gradient(45deg, var(--color-violet), var(--color-violet-dark));
+      color: #fff; border-radius: var(--radius-md); margin-bottom: -20px; position: relative; z-index: 5;
+      box-shadow: 0 4px 14px -4px rgba(124, 58, 237, .4);
+    }
+    .generator-card {
+      background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+      padding: 28px; padding-top: 40px; width: 100%; max-width: var(--tool-max-w);
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display: flex; flex-direction: column; gap: 24px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-label { font-weight: 500; color: var(--color-text-primary); }
+    .form-input {
+      width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+      font-size: 1rem; color: var(--color-text-primary); background: var(--color-bg);
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .form-input:focus { outline: none; border-color: var(--color-violet); box-shadow: 0 0 0 3px rgba(124, 58, 237, .2); }
+    .actions { display: flex; justify-content: flex-end; gap: 12px; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      font-weight: 500; padding: 10px 16px; border-radius: var(--radius-md); border: 1px solid var(--color-border);
+      cursor: pointer; transition: background-color .2s, box-shadow .2s, border-color .2s, color .2s; font-size: 14px;
+      background: var(--color-bg); color: var(--color-text-secondary);
+    }
+    .btn:hover:not(:disabled) { border-color: var(--color-violet); color: var(--color-violet); }
+    .btn:focus-visible { outline: 2px solid transparent; outline-offset: 2px; box-shadow: 0 0 0 3px rgba(124, 58, 237, .4); }
+    .btn.active { background: var(--color-violet); color: #fff; border-color: var(--color-violet); }
+    .btn.active:hover { background: var(--color-violet-dark); border-color: var(--color-violet-dark); }
+    .btn-primary { background: var(--color-violet); color: #fff; border-color: var(--color-violet); }
+    .btn-primary:hover:not(:disabled) { background: var(--color-violet-dark); border-color: var(--color-violet-dark); }
+    .btn-primary:disabled { background: #A78BFA; cursor: not-allowed; border-color: #A78BFA; }
+
+    /* Styles spécifiques à l'outil */
+    .editor-grid-3d { display: grid; grid-template-columns: 320px 1fr; gap: 24px; }
+    .controls-panel { display: flex; flex-direction: column; gap: 16px; }
+    .preview-panel { display: flex; flex-direction: column; gap: 16px; }
+    .stage {
+      flex-grow: 1; border: 1px dashed var(--color-border); border-radius: var(--radius-md);
+      display: grid; place-items: center; padding: 16px;
+      background: repeating-conic-gradient(var(--color-bg-alt) 0 25%, transparent 0 50%) 0/24px 24px;
+      min-height: 300px;
+    }
+    #preview-canvas { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+    .presets-group { display: flex; flex-wrap: wrap; gap: 8px; }
+    .presets-group .btn { padding: 8px 12px; font-size: 13px; }
+
+    /* Custom select for fonts */
+    .custom-select-wrapper { position: relative; }
+    .custom-select-trigger { text-align: left; display: flex; justify-content: space-between; align-items: center; }
+    .select-arrow { 
+      content: ''; width: 10px; height: 10px; transform: translateY(-25%) rotate(45deg);
+      border: solid var(--color-text-secondary); border-width: 0 2px 2px 0; pointer-events: none;
+      transition: transform .2s;
+    }
+    .custom-select-trigger[aria-expanded="true"] .select-arrow { transform: translateY(0) rotate(225deg); }
+    .custom-select-panel {
+      position: absolute; z-index: 10; top: calc(100% + 4px); left: 0; right: 0;
+      background: var(--color-bg); border: 1px solid var(--color-border);
+      border-radius: var(--radius-md); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 10%);
+      max-height: 250px; overflow-y: auto; opacity: 0; transform: translateY(-10px);
+      pointer-events: none; transition: opacity .2s, transform .2s;
+    }
+    .custom-select-trigger[aria-expanded="true"] + .custom-select-panel {
+      opacity: 1; transform: translateY(0); pointer-events: auto;
+    }
+    .custom-select-option { padding: 10px 14px; cursor: pointer; font-size: 1.25rem; }
+    .custom-select-option:hover { background: var(--color-bg-alt); }
+    .custom-select-option.selected { background: var(--color-violet-dark); color: #fff; }
+    
+    input[type="range"].styled-slider {
+      -webkit-appearance: none; appearance: none; width: 100%; height: 8px; background: transparent; cursor: pointer;
+    }
+    input[type="range"].styled-slider::-webkit-slider-runnable-track {
+      width: 100%; height: 8px; border-radius: 4px;
+      background: linear-gradient(to right, var(--color-violet) var(--value, 0%), var(--color-border) var(--value, 0%));
+    }
+    input[type="range"].styled-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; margin-top: -4px; width: 16px; height: 16px; border-radius: 50%;
+      background: var(--color-violet); border: 2px solid #fff; box-shadow: 0 0 0 3px rgba(124, 58, 237, .2);
+    }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="wide">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Générateur de Texte 3D</h1>
+
+      <div class="generator-card" role="region" aria-label="Générateur de Texte 3D">
+        <div class="editor-grid-3d">
+          <div class="controls-panel">
+            <div class="form-group">
+              <label for="text-input" class="form-label">Votre Texte</label>
+              <input type="text" id="text-input" class="form-input" value="La Ruche">
+            </div>
+
+            <div class="form-group">
+              <label for="font-select-trigger" class="form-label">Police</label>
+              <div class="custom-select-wrapper" id="font-select-wrapper">
+                <button id="font-select-trigger" class="form-input custom-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                  <span id="font-select-value">Anton</span>
+                  <span class="select-arrow"></span>
+                </button>
+                <div id="font-select-panel" class="custom-select-panel" role="listbox" hidden>
+                  <!-- Options générées par JS -->
+                </div>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">Styles Prédéfinis</label>
+              <div class="presets-group" id="presets-container">
+                <button class="btn active" data-preset="chrome">Chrome</button>
+                <button class="btn" data-preset="gold">Doré</button>
+                <button class="btn" data-preset="neon">Néon</button>
+                <button class="btn" data-preset="retro">Rétro</button>
+                <button class="btn" data-preset="candy">Bonbon</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="size-slider" class="form-label">Taille</label>
+              <input type="range" id="size-slider" class="styled-slider" min="50" max="300" value="120">
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div class="form-group">
+                <label for="color-face" class="form-label">Couleur Face</label>
+                <input type="color" id="color-face" class="form-input" value="#ffffff" style="padding:4px; height:44px;">
+              </div>
+              <div class="form-group">
+                <label for="color-side" class="form-label">Couleur 3D</label>
+                <input type="color" id="color-side" class="form-input" value="#cccccc" style="padding:4px; height:44px;">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="depth-slider" class="form-label">Profondeur 3D</label>
+              <input type="range" id="depth-slider" class="styled-slider" min="1" max="50" value="10">
+            </div>
+
+            <div class="form-group">
+              <label for="angle-slider" class="form-label">Angle Ombre</label>
+              <input type="range" id="angle-slider" class="styled-slider" min="0" max="360" value="135">
+            </div>
+          </div>
+
+          <div class="preview-panel">
+            <div class="stage" id="stage">
+              <canvas id="preview-canvas"></canvas>
+            </div>
+            <div class="actions">
+              <button class="btn btn-primary" id="export-btn">Exporter PNG</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Background hex grid
+    (function(){
+      const c = document.getElementById('bg-canvas'); if(!c) return;
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1; const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,rect.width,rect.height);
+        const size = 24, hexW = 2 * size, hexH = Math.sqrt(3) * size, stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)'; ctx.lineWidth = 1;
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX, y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i, px = x + size * Math.cos(a), py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true}); draw();
+    })();
+
+    // Outil Texte 3D
+    document.addEventListener('DOMContentLoaded', () => {
+        const textInput = document.getElementById('text-input');
+        const sizeSlider = document.getElementById('size-slider');
+        const colorFaceInput = document.getElementById('color-face');
+        const colorSideInput = document.getElementById('color-side');
+        const depthSlider = document.getElementById('depth-slider');
+        const angleSlider = document.getElementById('angle-slider');
+        const presetsContainer = document.getElementById('presets-container');
+        const exportBtn = document.getElementById('export-btn');
+        const canvas = document.getElementById('preview-canvas');
+        const ctx = canvas.getContext('2d');
+        const stage = document.getElementById('stage');
+
+        const FONT_LIST = [
+            'Abril Fatface', 'Alfa Slab One', 'Anton', 'Bangers', 'Black Ops One',
+            'Bungee', 'Changa One', 'Exo 2', 'Graduate', 'Kanit', 'Knewave',
+            'Luckiest Guy', 'Montserrat', 'Oswald', 'Passion One', 'Paytone One',
+            'Permanent Marker', 'Poppins', 'Press Start 2P', 'Righteous', 'Russo One',
+            'Shrikhand', 'Space Grotesk', 'Staatliches', 'Titan One', 'Ultra'
+        ];
+
+        const state = {
+            text: 'La Ruche',
+            font: 'Anton',
+            size: 120,
+            colorFace: '#ffffff',
+            colorSide: '#cccccc',
+            depth: 10,
+            angle: 135,
+        };
+
+        const presets = {
+            chrome: { colorFace: '#E0E0E0', colorSide: '#888888', depth: 8, angle: 135, font: 'Anton' },
+            gold: { colorFace: '#FFD700', colorSide: '#B8860B', depth: 10, angle: 135, font: 'Ultra' },
+            neon: { colorFace: '#39FF14', colorSide: '#28B40E', depth: 12, angle: 225, font: 'Bungee' },
+            retro: { colorFace: '#FF8C00', colorSide: '#8B4513', depth: 15, angle: 135, font: 'Graduate' },
+            candy: { colorFace: '#FF69B4', colorSide: '#C71585', depth: 10, angle: 135, font: 'Luckiest Guy' },
+        };
+        
+        function fontCSS(name) { return name.includes(' ') ? `"${name}"` : name; }
+        async function ensureFont(font, size) {
+            try { await document.fonts.load(`bold ${size}px ${fontCSS(font)}`); } catch(e) { console.warn('Font could not be loaded'); }
+        }
+
+        async function render() {
+            await ensureFont(state.font, state.size);
+
+            ctx.font = `bold ${state.size}px ${fontCSS(state.font)}`;
+            const metrics = ctx.measureText(state.text || ' ');
+            const textWidth = metrics.width;
+            const ascent = metrics.actualBoundingBoxAscent;
+            const descent = metrics.actualBoundingBoxDescent;
+            const textHeight = ascent + descent;
+
+            if (!state.text.trim() || textHeight === 0) {
+                canvas.width = 1; canvas.height = 1;
+                return;
+            }
+            
+            const stageRect = stage.getBoundingClientRect();
+            const padding = 32;
+            const maxW = stageRect.width - padding;
+            const maxH = stageRect.height - padding;
+
+            const angleRad = state.angle * Math.PI / 180;
+            const offsetX = Math.cos(angleRad);
+            const offsetY = Math.sin(angleRad);
+            
+            const totalWidth = textWidth + Math.abs(state.depth * offsetX);
+            const totalHeight = textHeight + Math.abs(state.depth * offsetY);
+            
+            const scale = Math.min(maxW / totalWidth, maxH / totalHeight, 1);
+            
+            canvas.width = totalWidth * scale;
+            canvas.height = totalHeight * scale;
+
+            ctx.save();
+            ctx.scale(scale, scale);
+            
+            const drawAreaX = -Math.min(0, state.depth * offsetX);
+            const drawAreaY = -Math.min(0, state.depth * offsetY);
+            ctx.translate(drawAreaX, drawAreaY);
+            
+            ctx.font = `bold ${state.size}px ${fontCSS(state.font)}`;
+            ctx.textBaseline = 'alphabetic';
+            ctx.textAlign = 'left';
+            
+            const drawY = ascent;
+
+            // Extrusion/3D effect
+            ctx.fillStyle = state.colorSide;
+            for (let i = state.depth; i > 0; i--) {
+                ctx.fillText(state.text, i * offsetX, i * offsetY + drawY);
+            }
+
+            // Face
+            ctx.fillStyle = state.colorFace;
+            ctx.fillText(state.text, 0, drawY);
+
+            // Highlight
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            ctx.fillText(state.text, -1, -1 + drawY);
+            
+            ctx.restore();
+        }
+
+        function updateUI() {
+            textInput.value = state.text;
+            sizeSlider.value = state.size;
+            colorFaceInput.value = state.colorFace;
+            colorSideInput.value = state.colorSide;
+            depthSlider.value = state.depth;
+            angleSlider.value = state.angle;
+            
+            document.querySelector('#font-select-value').textContent = state.font;
+            document.querySelector('#font-select-trigger').style.fontFamily = fontCSS(state.font);
+
+            document.querySelectorAll('.custom-select-option').forEach(opt => {
+              opt.classList.toggle('selected', opt.dataset.value === state.font);
+            });
+
+            document.querySelectorAll('.styled-slider').forEach(s => {
+              const p = ((s.value - s.min) / (s.max - s.min)) * 100;
+              s.style.setProperty('--value', `${p}%`);
+            });
+
+            render();
+        }
+
+        // --- Custom Select Logic ---
+        const fontSelectWrapper = document.getElementById('font-select-wrapper');
+        const fontSelectTrigger = document.getElementById('font-select-trigger');
+        const fontSelectPanel = document.getElementById('font-select-panel');
+        const fontSelectValue = document.getElementById('font-select-value');
+
+        function setupFontSelector() {
+          FONT_LIST.forEach(font => {
+            const option = document.createElement('div');
+            option.className = 'custom-select-option';
+            option.dataset.value = font;
+            option.textContent = font;
+            option.style.fontFamily = fontCSS(font);
+            fontSelectPanel.appendChild(option);
+          });
+
+          fontSelectTrigger.addEventListener('click', () => {
+            const isExpanded = fontSelectTrigger.getAttribute('aria-expanded') === 'true';
+            fontSelectTrigger.setAttribute('aria-expanded', !isExpanded);
+            fontSelectPanel.hidden = isExpanded;
+          });
+          
+          fontSelectPanel.addEventListener('click', (e) => {
+            const option = e.target.closest('.custom-select-option');
+            if (option) {
+              state.font = option.dataset.value;
+              fontSelectTrigger.setAttribute('aria-expanded', 'false');
+              fontSelectPanel.hidden = true;
+              updateUI();
+            }
+          });
+
+          document.addEventListener('click', (e) => {
+            if (!fontSelectWrapper.contains(e.target)) {
+              fontSelectTrigger.setAttribute('aria-expanded', 'false');
+              fontSelectPanel.hidden = true;
+            }
+          });
+        }
+
+
+        function setupEventListeners() {
+            textInput.addEventListener('input', () => { state.text = textInput.value || ' '; render(); });
+            sizeSlider.addEventListener('input', () => { state.size = parseInt(sizeSlider.value); updateUI(); });
+            colorFaceInput.addEventListener('input', () => { state.colorFace = colorFaceInput.value; render(); });
+            colorSideInput.addEventListener('input', () => { state.colorSide = colorSideInput.value; render(); });
+            depthSlider.addEventListener('input', () => { state.depth = parseInt(depthSlider.value); updateUI(); });
+            angleSlider.addEventListener('input', () => { state.angle = parseInt(angleSlider.value); updateUI(); });
+
+            presetsContainer.addEventListener('click', (e) => {
+                const btn = e.target.closest('button');
+                if (!btn) return;
+                const presetName = btn.dataset.preset;
+                if (presets[presetName]) {
+                    Object.assign(state, presets[presetName]);
+                    presetsContainer.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    updateUI();
+                }
+            });
+
+            exportBtn.addEventListener('click', () => {
+                const link = document.createElement('a');
+                link.download = `texte-3d-${state.text.toLowerCase().replace(/\s/g, '-')}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+        }
+        
+        // Initialisation
+        setupFontSelector();
+        const initialPreset = presets[presetsContainer.querySelector('.btn.active').dataset.preset];
+        Object.assign(state, initialPreset);
+        setupEventListeners();
+        updateUI();
+    });
+
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

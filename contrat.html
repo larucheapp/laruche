@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Générateur de Contrat - La Ruche</title>
+  <meta name="description" content="Créez un contrat de prestation de services simple et professionnel en quelques clics.">
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px; /* par défaut, peut être changé via body[data-size] */
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:flex-start; justify-content:center;
+      padding:48px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+    .form-group{display:flex; flex-direction:column; gap:8px}
+    .form-label{font-weight:500; color:var(--color-text-primary)}
+    .form-input, textarea.form-input{
+      width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      font-size:1rem; color:var(--color-text-primary); background:var(--color-bg);
+      font-family:inherit; line-height: 1.5;
+      transition:border-color .2s, box-shadow .2s;
+    }
+    textarea.form-input {
+        min-height: 120px;
+        resize: vertical;
+    }
+    .form-input:focus{outline:none; border-color:var(--color-violet); box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+    
+    .actions{display:flex; justify-content:flex-end; gap:12px; margin-top: 8px;}
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:500; padding:10px 16px; border-radius:var(--radius-md); border:none; cursor:pointer;
+      transition:background-color .2s, box-shadow .2s; font-size:14px;
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn-primary{background:var(--color-violet); color:#fff}
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark)}
+    .btn-primary:disabled{background:#A78BFA; cursor:not-allowed}
+    .status-text{font-size:14px; color:var(--color-text-secondary); text-align:center; min-height:21px}
+
+    /* ===== STYLES GÉNÉRATEUR DE CONTRAT ===== */
+    .form-section { display: flex; flex-direction: column; gap: 16px; }
+    .form-section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--color-text-primary);
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--color-border);
+        margin-bottom: 8px;
+    }
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+    }
+    .payment-group {
+        display: flex;
+        gap: 12px;
+    }
+    .payment-group .form-input:first-child { flex-grow: 1; }
+    .payment-group .form-input:last-child { flex-basis: 100px; }
+
+    .btn .spinner {
+        width: 16px; height: 16px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        display: none;
+    }
+    .btn.loading .spinner { display: block; }
+    .btn.loading .btn-text { display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="wide">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Générateur de Contrat</h1>
+      
+      <div class="generator-card" role="region" aria-label="Générateur de Contrat">
+        <form id="contract-form">
+          
+          <div class="form-section">
+            <h2 class="form-section-title">Les Parties</h2>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="party1-name" class="form-label">Partie A (ex: Le Prestataire)</label>
+                <input type="text" id="party1-name" class="form-input" placeholder="Nom complet ou raison sociale" required>
+                <input type="text" id="party1-address" class="form-input" placeholder="Adresse complète" required>
+              </div>
+              <div class="form-group">
+                <label for="party2-name" class="form-label">Partie B (ex: Le Client)</label>
+                <input type="text" id="party2-name" class="form-input" placeholder="Nom complet ou raison sociale" required>
+                <input type="text" id="party2-address" class="form-input" placeholder="Adresse complète" required>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h2 class="form-section-title">Objet du Contrat</h2>
+            <div class="form-group">
+              <label for="service-description" class="form-label">Description des services</label>
+              <textarea id="service-description" class="form-input" placeholder="Détaillez la nature de la prestation, les livrables, etc." required></textarea>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h2 class="form-section-title">Modalités Financières et Durée</h2>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="payment-amount" class="form-label">Rémunération</label>
+                <div class="payment-group">
+                  <input type="number" id="payment-amount" class="form-input" placeholder="Montant total (ex: 1500)" required step="0.01">
+                  <input type="text" id="payment-currency" class="form-input" value="EUR" required>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="start-date" class="form-label">Durée de la prestation</label>
+                 <div class="payment-group">
+                    <input type="date" id="start-date" class="form-input" required title="Date de début">
+                    <input type="date" id="end-date" class="form-input" required title="Date de fin">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button type="submit" id="generate-pdf-btn" class="btn btn-primary">
+              <span class="btn-text">Générer le PDF</span>
+              <div class="spinner"></div>
+            </button>
+          </div>
+          <div id="status" class="status-text"></div>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Background hex grid — NE PAS MODIFIER
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      if(!c) return;
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+        const size=24,hexW=2*size,hexH=Math.sqrt(3)*size,stepX=hexW*3/4;
+        ctx.strokeStyle='rgba(124,58,237,0.10)'; ctx.lineWidth=1;
+        for(let r=0;r*hexH<rect.height+hexH;r++) for(let col=0;col*stepX<rect.width+hexW;col++){
+          const x=col*stepX, y=r*hexH+(col%2?hexH/2:0);
+          ctx.beginPath();
+          for(let i=0;i<6;i++){ const a=2*Math.PI/6*i,px=x+size*Math.cos(a),py=y+size*Math.sin(a); if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py); }
+          ctx.closePath(); ctx.stroke();
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true}); draw();
+    })();
+  </script>
+  
+  <!-- jsPDF Library embedded -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('contract-form');
+      const generateBtn = document.getElementById('generate-pdf-btn');
+      const statusEl = document.getElementById('status');
+      
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        // Form data
+        const data = {
+          party1Name: document.getElementById('party1-name').value,
+          party1Address: document.getElementById('party1-address').value,
+          party2Name: document.getElementById('party2-name').value,
+          party2Address: document.getElementById('party2-address').value,
+          serviceDescription: document.getElementById('service-description').value,
+          paymentAmount: document.getElementById('payment-amount').value,
+          paymentCurrency: document.getElementById('payment-currency').value,
+          startDate: new Date(document.getElementById('start-date').value).toLocaleDateString('fr-FR'),
+          endDate: new Date(document.getElementById('end-date').value).toLocaleDateString('fr-FR'),
+        };
+
+        generatePdf(data);
+      });
+
+      async function generatePdf(data) {
+        setLoading(true);
+        statusEl.textContent = 'Génération du PDF en cours...';
+
+        try {
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF({
+            orientation: 'p',
+            unit: 'mm',
+            format: 'a4'
+          });
+
+          const pageW = doc.internal.pageSize.getWidth();
+          const margin = 20;
+          let y = margin;
+
+          // Helper function to write text and move cursor
+          const writeText = (text, options = {}, newY) => {
+            doc.setFont(options.font || 'helvetica', options.style || 'normal');
+            doc.setFontSize(options.size || 11);
+            doc.setTextColor(options.color || '#141417');
+            const lines = doc.splitTextToSize(text, pageW - margin * 2);
+            doc.text(lines, margin, y);
+            y += (doc.getTextDimensions(lines).h) + (newY || 6);
+          };
+
+          // --- PDF CONTENT ---
+
+          // Title
+          writeText('CONTRAT DE PRESTATION DE SERVICES', { size: 16, style: 'bold' }, 15);
+          
+          // Parties
+          writeText('Entre les soussignés :', { style: 'bold' }, 10);
+          writeText(`${data.party1Name}, \ndomicilié(e) au ${data.party1Address}, \nci-après dénommé(e) "Le Prestataire",`, {}, 12);
+          writeText('Et :', { style: 'bold' }, 10);
+          writeText(`${data.party2Name}, \ndomicilié(e) au ${data.party2Address}, \nci-après dénommé(e) "Le Client".`, {}, 15);
+          
+          // Preamble
+          writeText('Il a été convenu et arrêté ce qui suit :', { style: 'italic' }, 12);
+
+          // Article 1: Objet
+          writeText('ARTICLE 1 : OBJET DU CONTRAT', { style: 'bold' }, 8);
+          writeText(`Le présent contrat a pour objet de définir les conditions dans lesquelles le Prestataire s'engage à réaliser pour le Client la prestation suivante : \n${data.serviceDescription}`, {}, 12);
+          
+          // Article 2: Duree
+          writeText('ARTICLE 2 : DURÉE DU CONTRAT', { style: 'bold' }, 8);
+          writeText(`Le présent contrat est conclu pour une durée déterminée, prenant effet le ${data.startDate} pour s'achever le ${data.endDate}.`, {}, 12);
+          
+          // Article 3: Remuneration
+          writeText('ARTICLE 3 : RÉMUNÉRATION', { style: 'bold' }, 8);
+          writeText(`En contrepartie de la réalisation des prestations définies à l'article 1, le Client versera au Prestataire la somme forfaitaire de ${data.paymentAmount} ${data.paymentCurrency}.`, {}, 12);
+
+          // Signature section
+          y = doc.internal.pageSize.getHeight() - 60; // Move to bottom
+          writeText(`Fait en deux exemplaires originaux,`, {}, 15);
+          
+          const signatureY = y;
+          const signatureX1 = margin;
+          const signatureX2 = pageW / 2 + 10;
+          
+          doc.text('Pour le Prestataire', signatureX1, signatureY);
+          doc.text(`${data.party1Name}`, signatureX1, signatureY + 5);
+          doc.text('Signature :', signatureX1, signatureY + 20);
+          doc.line(signatureX1, signatureY + 18, signatureX1 + 60, signatureY + 18);
+
+          doc.text('Pour le Client', signatureX2, signatureY);
+          doc.text(`${data.party2Name}`, signatureX2, signatureY + 5);
+          doc.text('Signature :', signatureX2, signatureY + 20);
+          doc.line(signatureX2, signatureY + 18, signatureX2 + 60, signatureY + 18);
+
+          doc.save(`Contrat_${data.party1Name}_${data.party2Name}.pdf`);
+          statusEl.textContent = 'PDF généré avec succès !';
+          setTimeout(() => statusEl.textContent = '', 3000);
+
+        } catch (error) {
+          console.error("Erreur lors de la génération du PDF:", error);
+          statusEl.textContent = 'Une erreur est survenue.';
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      function setLoading(isLoading) {
+        generateBtn.disabled = isLoading;
+        if (isLoading) {
+          generateBtn.classList.add('loading');
+        } else {
+          generateBtn.classList.remove('loading');
+        }
+      }
+    });
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compresseur d'Image</title>
+    <meta name="description" content="Compresseur d'image minimaliste, rapide et fonctionnant hors-ligne.">
+    <style>
+        :root {
+            --color-bg: #FFFFFF;
+            --color-bg-alt: #F7F8FA;
+            --color-border: #E9EAF0;
+            --color-text-primary: #141417;
+            --color-text-secondary: #6B7280;
+            --color-violet: #7C3AED;
+            --color-violet-dark: #6D28D9;
+            --radius-md: 12px;
+            --radius-lg: 14px;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            height: 100%;
+            background-color: var(--color-bg); /* Apply base background color here */
+        }
+
+        body {
+            height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+            color: var(--color-text-primary);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            overflow: hidden; /* Prevent scrollbars from canvas behavior */
+            display: flex;
+            flex-direction: column;
+        }
+
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+
+        .app-header {
+            flex-shrink: 0;
+            background-color: var(--color-bg-alt);
+            border-bottom: 1px solid var(--color-border);
+            padding: 0 24px; /* Removed vertical padding */
+            display: flex;
+            align-items: center;
+        }
+
+        .app-header a {
+            display: inline-flex;
+            align-items: center;
+        }
+        
+        .logo-img {
+            height: 70px; /* Increased height to fill header */
+            width: auto;
+            vertical-align: middle;
+        }
+
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 48px 24px;
+            overflow-y: auto;
+        }
+        
+        .tool-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+        
+        .tool-title {
+            font-size: 1.75rem;
+            font-weight: 600;
+            padding: 12px 28px;
+            background: linear-gradient(45deg, var(--color-violet), var(--color-violet-dark));
+            color: white;
+            border-radius: var(--radius-md);
+            margin-bottom: -20px;
+            position: relative;
+            z-index: 5;
+            box-shadow: 0 4px 14px -4px rgba(124, 58, 237, 0.4);
+        }
+
+        .compressor-card {
+            background-color: var(--color-bg);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+            width: 100%;
+            max-width: 480px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding-top: 40px; /* Add padding to accommodate the overlapping title */
+        }
+
+        .drop-zone {
+            border: 2px dashed var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 32px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s, background-color 0.2s;
+            position: relative;
+        }
+
+        .drop-zone:hover,
+        .drop-zone.drag-over {
+            border-color: rgba(124, 58, 237, 0.4);
+            background-color: #F9FAFB;
+        }
+
+        .drop-zone-input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .drop-zone-icon {
+            color: var(--color-violet);
+            margin-bottom: 12px;
+        }
+
+        .drop-zone-text-primary {
+            font-weight: 500;
+            color: var(--color-text-primary);
+        }
+
+        .drop-zone-text-secondary {
+            color: var(--color-text-secondary);
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .checkbox-container input {
+            cursor: pointer;
+        }
+
+        .status-text {
+            font-size: 14px;
+            color: var(--color-text-secondary);
+            flex-grow: 1;
+            text-align: right;
+            min-height: 21px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-weight: 500;
+            padding: 10px 16px;
+            border-radius: var(--radius-md);
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s, box-shadow 0.2s;
+            font-size: 14px;
+        }
+
+        .btn:focus-visible {
+            outline: 2px solid transparent;
+            outline-offset: 2px;
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.4);
+        }
+
+        .btn-primary {
+            background-color: var(--color-violet);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: var(--color-violet-dark);
+        }
+
+        .btn-primary:disabled {
+            background-color: #A78BFA;
+            cursor: not-allowed;
+        }
+
+        .result {
+            display: none; /* Hidden by default */
+            align-items: center;
+            gap: 16px;
+            padding: 16px;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            background-color: #F9FAFB;
+        }
+
+        .result.visible {
+            display: flex;
+        }
+
+        .result-thumb {
+            width: 64px;
+            height: 64px;
+            object-fit: cover;
+            border-radius: 8px;
+            background-color: var(--color-bg);
+            border: 1px solid var(--color-border);
+        }
+
+        .result-info {
+            flex-grow: 1;
+        }
+
+        .result-filename {
+            font-weight: 500;
+            font-size: 14px;
+            word-break: break-all;
+        }
+
+        .result-details {
+            font-size: 12px;
+            color: var(--color-text-secondary);
+        }
+
+        .btn-download {
+            background-color: var(--color-bg);
+            color: var(--color-text-primary);
+            border: 1px solid var(--color-border);
+            box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        }
+
+        .btn-download:hover {
+            background-color: var(--color-bg-alt);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="bg-canvas"></canvas>
+
+    <header class="app-header">
+        <a href="index.html" aria-label="Accueil">
+            <img src="logo-2.png" alt="Logo Compresseur d'Image" class="logo-img">
+        </a>
+    </header>
+
+    <main class="main-content">
+        <div class="tool-wrapper">
+             <h1 class="tool-title">Compresseur d'Image</h1>
+            <div class="compressor-card">
+                <div id="drop-zone" class="drop-zone" tabindex="0">
+                    <input type="file" id="file-input" class="drop-zone-input" accept="image/jpeg,image/png,image/webp,image/gif">
+                    <div class="drop-zone-icon" aria-hidden="true">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    </div>
+                    <span class="drop-zone-text-primary">Importer une image</span>
+                    <span class="drop-zone-text-secondary"> ou déposez-la ici</span>
+                </div>
+                
+                <div class="actions">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="limit-size-checkbox">
+                        <span>Limiter la taille à ~1,9 Mo</span>
+                    </label>
+                    <button id="compress-btn" class="btn btn-primary" disabled>
+                        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9"/><path d="M12 8v4l2 2"/><path d="m15 4-2.5 2.5"/><path d="m9 4 2.5 2.5"/><path d="M4 9l2.5 2.5"/><path d="M4 15l2.5-2.5"/></svg>
+                        Compresser
+                    </button>
+                </div>
+                <div class="status-text" id="status-text" role="status" aria-live="polite"></div>
+
+                <div id="result" class="result">
+                    <img id="result-thumb" class="result-thumb" alt="Aperçu de l'image compressée">
+                    <div class="result-info">
+                        <div id="result-filename" class="result-filename"></div>
+                        <div id="result-details" class="result-details"></div>
+                    </div>
+                    <a id="download-btn" href="#" download="compressed.webp" class="btn btn-download">
+                        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Télécharger
+                    </a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script defer>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Elements ---
+            const dropZone = document.getElementById('drop-zone');
+            const fileInput = document.getElementById('file-input');
+            const compressBtn = document.getElementById('compress-btn');
+            const limitSizeCheckbox = document.getElementById('limit-size-checkbox');
+            const statusText = document.getElementById('status-text');
+            const resultSection = document.getElementById('result');
+            const resultThumb = document.getElementById('result-thumb');
+            const resultFilename = document.getElementById('result-filename');
+            const resultDetails = document.getElementById('result-details');
+            const downloadBtn = document.getElementById('download-btn');
+            const bgCanvas = document.getElementById('bg-canvas');
+            const bgCtx = bgCanvas.getContext('2d');
+
+            // --- State ---
+            let currentFile = null;
+            let imageBitmap = null;
+            let objectUrl = null;
+
+            // --- Constants ---
+            const TARGET_BYTES = 1.9 * 1024 * 1024;
+            const TOLERANCE = 50 * 1024;
+            const MAX_ITERATIONS = 8;
+            
+            // --- Background Canvas ---
+            const drawHexGrid = () => {
+                const dpr = window.devicePixelRatio || 1;
+                const rect = bgCanvas.getBoundingClientRect();
+                bgCanvas.width = rect.width * dpr;
+                bgCanvas.height = rect.height * dpr;
+                bgCtx.scale(dpr, dpr);
+
+                const size = 24; // hex edge size
+                const hexWidth = 2 * size;
+                const hexHeight = Math.sqrt(3) * size;
+                const horizDist = hexWidth * 3/4;
+                
+                bgCtx.strokeStyle = 'rgba(124, 58, 237, 0.1)'; // Increased opacity
+                bgCtx.lineWidth = 1;
+
+                for (let row = 0; row * hexHeight < rect.height + hexHeight; row++) {
+                    for (let col = 0; col * horizDist < rect.width + hexWidth; col++) {
+                        const x = col * horizDist;
+                        const y = row * hexHeight + (col % 2 === 1 ? hexHeight / 2 : 0);
+                        
+                        bgCtx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            const angle = 2 * Math.PI / 6 * i;
+                            const px = x + size * Math.cos(angle);
+                            const py = y + size * Math.sin(angle);
+                            if (i === 0) bgCtx.moveTo(px, py);
+                            else bgCtx.lineTo(px, py);
+                        }
+                        bgCtx.closePath();
+                        bgCtx.stroke();
+                    }
+                }
+            };
+            
+            window.addEventListener('resize', drawHexGrid);
+            drawHexGrid();
+
+            // --- File Handling ---
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('drag-over');
+            });
+            dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('drag-over');
+                const files = e.dataTransfer.files;
+                if (files.length) handleFile(files[0]);
+            });
+            fileInput.addEventListener('change', () => {
+                if (fileInput.files.length) handleFile(fileInput.files[0]);
+            });
+            dropZone.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') fileInput.click();
+            });
+
+
+            async function handleFile(file) {
+                if (!file.type.startsWith('image/')) {
+                    updateStatus('Fichier non supporté.', 'error');
+                    return;
+                }
+                
+                resetUI();
+                currentFile = file;
+
+                try {
+                    // Use createImageBitmap for EXIF orientation handling
+                    if (typeof createImageBitmap === 'function') {
+                        imageBitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+                    } else {
+                        // Fallback for older browsers
+                        const url = URL.createObjectURL(file);
+                        const img = new Image();
+                        img.src = url;
+                        await img.decode();
+                        URL.revokeObjectURL(url);
+                        imageBitmap = img;
+                    }
+                    
+                    compressBtn.disabled = false;
+                    updateStatus(`Prêt à compresser ${file.name}`);
+
+                    // Generate a quick thumbnail for display before compression
+                    const thumbUrl = URL.createObjectURL(file);
+                    resultThumb.src = thumbUrl; // No revoke, used later
+                    resultSection.classList.add('visible');
+                    resultFilename.textContent = 'Aperçu...';
+                    resultDetails.textContent = `Taille originale: ${formatBytes(file.size)}`;
+
+                } catch (error) {
+                    console.error("Error loading image:", error);
+                    updateStatus("Erreur au chargement de l'image.", 'error');
+                    resetUI();
+                }
+            }
+
+            // --- UI Updates ---
+            function resetUI() {
+                compressBtn.disabled = true;
+                statusText.textContent = '';
+                resultSection.classList.remove('visible');
+                if (objectUrl) URL.revokeObjectURL(objectUrl);
+                objectUrl = null;
+                currentFile = null;
+                imageBitmap = null;
+                fileInput.value = ''; // Allow re-selecting the same file
+            }
+
+            function updateStatus(message, type = 'info') {
+                statusText.textContent = message;
+                statusText.style.color = type === 'error' ? '#EF4444' : 'var(--color-text-secondary)';
+            }
+
+            function formatBytes(bytes, decimals = 2) {
+                if (bytes === 0) return '0 Octets';
+                const k = 1024;
+                const dm = decimals < 0 ? 0 : decimals;
+                const sizes = ['Octets', 'Ko', 'Mo', 'Go'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+            }
+            
+            // --- Compression Logic ---
+            compressBtn.addEventListener('click', async () => {
+                if (!imageBitmap || !currentFile) return;
+
+                compressBtn.disabled = true;
+                updateStatus('Compression...');
+
+                try {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = imageBitmap.width;
+                    canvas.height = imageBitmap.height;
+                    ctx.drawImage(imageBitmap, 0, 0);
+
+                    let compressedBlob;
+                    if (limitSizeCheckbox.checked) {
+                        compressedBlob = await compressToTargetSize(canvas);
+                    } else {
+                        compressedBlob = await getWebPBlob(canvas, 'image/webp', 0.82);
+                    }
+
+                    if (!compressedBlob) throw new Error("La compression a échoué.");
+
+                    displayResult(compressedBlob);
+                    updateStatus('Terminé !');
+
+                } catch (error) {
+                    console.error('Compression error:', error);
+                    updateStatus(`Erreur: ${error.message}`, 'error');
+                } finally {
+                     compressBtn.disabled = false;
+                }
+            });
+
+            function getWebPBlob(canvas, type, quality) {
+                return new Promise(resolve => canvas.toBlob(resolve, type, quality));
+            }
+            
+            async function compressToTargetSize(sourceCanvas) {
+                let canvas = sourceCanvas;
+                let ctx = canvas.getContext('2d', { alpha: false });
+                ctx.imageSmoothingQuality = 'high';
+                
+                // 1. Binary search for quality at full resolution
+                let quality = 0.8;
+                let minQ = 0.40, maxQ = 0.95;
+                let currentBlob;
+                let iterations = 0;
+
+                while(minQ <= maxQ && iterations < MAX_ITERATIONS) {
+                    iterations++;
+                    quality = (minQ + maxQ) / 2;
+                    currentBlob = await getWebPBlob(canvas, 'image/webp', quality);
+                    if (!currentBlob) throw new Error("Blob creation failed");
+
+                    if (currentBlob.size > TARGET_BYTES + TOLERANCE) {
+                        maxQ = quality - 0.01;
+                    } else if (currentBlob.size < TARGET_BYTES - TOLERANCE) {
+                        minQ = quality + 0.01;
+                    } else {
+                        return currentBlob; // Success!
+                    }
+                }
+                
+                // 2. If still too large, resize and repeat
+                if (currentBlob.size > TARGET_BYTES) {
+                    const scaleRatio = Math.sqrt(TARGET_BYTES / currentBlob.size);
+                    const newScale = Math.max(0.5, Math.min(0.95, scaleRatio));
+                    
+                    const newWidth = Math.round(canvas.width * newScale);
+                    const newHeight = Math.round(canvas.height * newScale);
+
+                    const resizedCanvas = document.createElement('canvas');
+                    resizedCanvas.width = newWidth;
+                    resizedCanvas.height = newHeight;
+                    const resizedCtx = resizedCanvas.getContext('2d', { alpha: false });
+                    resizedCtx.imageSmoothingQuality = 'high';
+                    resizedCtx.drawImage(imageBitmap, 0, 0, newWidth, newHeight);
+                    canvas = resizedCanvas;
+
+                    // Reset and rerun binary search
+                    minQ = 0.40; maxQ = 0.95; iterations = 0;
+                     while(minQ <= maxQ && iterations < MAX_ITERATIONS) {
+                        iterations++;
+                        quality = (minQ + maxQ) / 2;
+                        currentBlob = await getWebPBlob(canvas, 'image/webp', quality);
+                        if (!currentBlob) throw new Error("Blob creation failed after resize");
+
+                        if (currentBlob.size > TARGET_BYTES + TOLERANCE) {
+                            maxQ = quality - 0.01;
+                        } else if (currentBlob.size < TARGET_BYTES - TOLERANCE) {
+                            minQ = quality + 0.01;
+                        } else {
+                            break; // Close enough
+                        }
+                    }
+                }
+                
+                return currentBlob;
+            }
+
+            function displayResult(blob) {
+                if (objectUrl) URL.revokeObjectURL(objectUrl);
+                objectUrl = URL.createObjectURL(blob);
+                
+                const originalName = currentFile.name.substring(0, currentFile.name.lastIndexOf('.'));
+                const newFilename = `${originalName}-compressed.webp`;
+
+                resultThumb.src = objectUrl;
+                downloadBtn.href = objectUrl;
+                downloadBtn.download = newFilename;
+                
+                resultFilename.textContent = newFilename;
+                const gain = 100 - (blob.size / currentFile.size * 100);
+                resultDetails.textContent = 
+                    `${formatBytes(currentFile.size)} → ${formatBytes(blob.size)} (Gain: ${gain.toFixed(1)}%)`;
+                
+                resultSection.classList.add('visible');
+            }
+        });
+    </script>
+</body>
+</html>

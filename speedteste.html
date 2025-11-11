@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test de Vitesse - La Ruche</title>
+  <meta name="description" content="Testez la vitesse de votre connexion internet avec un outil rapide, simple et visuellement élégant. Mesurez votre ping, débit descendant et montant en un clic.">
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px;
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:center; justify-content:center;
+      padding:64px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+    .form-group{display:flex; flex-direction:column; gap:8px}
+    .form-label{font-weight:500; color:var(--color-text-primary)}
+    .form-input{
+      width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      font-size:1rem; color:var(--color-text-primary); background:var(--color-bg);
+      transition:border-color .2s, box-shadow .2s;
+    }
+    .form-input:focus{outline:none; border-color:var(--color-violet); box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+
+    .actions{display:flex; justify-content:center; gap:12px}
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:500; padding:10px 16px; border-radius:var(--radius-md); border:none; cursor:pointer;
+      transition:background-color .2s, box-shadow .2s, transform .1s, color .2s; font-size:1rem;
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn:active { transform: scale(0.98); }
+    .btn-primary{background:var(--color-violet); color:#fff; padding: 12px 24px;}
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark)}
+    .btn:disabled{background:#A78BFA; cursor:not-allowed; opacity: 0.7;}
+    .btn-secondary {
+      background-color: transparent;
+      color: var(--color-violet);
+      border: 1px solid var(--color-violet);
+    }
+    .btn-secondary:hover {
+      background-color: var(--color-violet);
+      color: #fff;
+    }
+
+    /* ===== SPEEDTEST STYLES ===== */
+    .speedtest-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 24px;
+    }
+    .gauge-wrapper {
+        position: relative;
+        width: 300px;
+        height: 260px;
+    }
+    .gauge-svg {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+    }
+    #liquid-fill {
+        transition: y 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .gauge-center-text {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif;
+        transition: fill 0.4s ease;
+    }
+    #speed-value {
+        font-size: 3.5rem;
+        font-weight: 700;
+        fill: var(--color-text-primary);
+    }
+    #speed-unit {
+        font-size: 1rem;
+        font-weight: 500;
+        fill: var(--color-text-secondary);
+    }
+    .gauge-wrapper.is-active #speed-value {
+        fill: #fff;
+    }
+    .gauge-wrapper.is-active #speed-unit {
+        fill: rgba(255, 255, 255, 0.8);
+    }
+    .results-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        width: 100%;
+        text-align: center;
+        border-top: 1px solid var(--color-border);
+        padding-top: 24px;
+    }
+    .result-item {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .result-label {
+        font-size: 0.9rem;
+        color: var(--color-text-secondary);
+        font-weight: 500;
+    }
+    .result-value {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--color-text-primary);
+        min-height: 2rem; /* Reserve space */
+    }
+    .result-value.animate-in {
+        animation: popIn 0.4s ease-out forwards;
+    }
+    #start-btn {
+        min-width: 180px;
+        font-size: 1.1rem;
+        padding: 14px 24px;
+    }
+
+    @keyframes popIn {
+        0% { transform: scale(0.8); opacity: 0; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* ===== MODAL STYLES ===== */
+    .modal-container {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+    .modal-container.is-visible {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .modal-overlay {
+        position: absolute;
+        inset: 0;
+        background-color: rgba(20, 20, 23, 0.6);
+        cursor: pointer;
+    }
+    .modal-content {
+        position: relative;
+        background: var(--color-bg);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        padding: 28px;
+        width: 100%;
+        max-width: 420px;
+        box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        transform: scale(0.95);
+        transition: transform 0.3s ease;
+    }
+    .modal-container.is-visible .modal-content {
+        transform: scale(1);
+    }
+    .modal-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--color-text-primary);
+        margin: 0;
+    }
+    .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        margin-top: 8px;
+    }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="default">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Test de Vitesse</h1>
+      <div class="generator-card" role="region" aria-label="Outil de test de vitesse">
+        <div class="speedtest-container">
+            <div class="gauge-wrapper" id="gauge-wrapper">
+                <svg viewBox="0 0 300 260" class="gauge-svg">
+                    <defs>
+                        <clipPath id="hexagon-clip">
+                            <path d="M 75 0 L 225 0 L 300 130 L 225 260 L 75 260 L 0 130 Z"></path>
+                        </clipPath>
+                    </defs>
+
+                    <g clip-path="url(#hexagon-clip)">
+                        <rect x="0" y="0" width="300" height="260" fill="var(--color-bg-alt)"></rect>
+                        <rect id="liquid-fill" x="0" y="260" width="300" height="260" fill="var(--color-violet)"></rect>
+                        <path id="liquid-wave" fill="var(--color-violet-dark)" opacity="0.5"></path>
+                    </g>
+
+                    <path d="M 75 0 L 225 0 L 300 130 L 225 260 L 75 260 L 0 130 Z" stroke="var(--color-border)" stroke-width="4" fill="none"></path>
+
+                    <text x="150" y="135" text-anchor="middle" class="gauge-center-text">
+                        <tspan id="speed-value">--</tspan>
+                    </text>
+                    <text x="150" y="165" text-anchor="middle" class="gauge-center-text">
+                        <tspan id="speed-unit">Mbps</tspan>
+                    </text>
+                </svg>
+            </div>
+            
+            <div class="status-text" id="status-text">Prêt à lancer le test</div>
+            
+            <div class="results-grid">
+                <div class="result-item">
+                    <span class="result-label">Ping</span>
+                    <span class="result-value" id="ping-result">--</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">Débit descendant</span>
+                    <span class="result-value" id="download-result">--</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">Débit montant</span>
+                    <span class="result-value" id="upload-result">--</span>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button id="start-btn" class="btn btn-primary">Lancer le Test</button>
+                <button id="export-btn" class="btn btn-secondary" style="display: none;">Exporter en PDF</button>
+            </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  
+  <div class="modal-container" id="pdf-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-overlay" data-close-modal></div>
+    <div class="modal-content">
+        <h2 class="modal-title" id="modal-title">Informations pour le rapport</h2>
+        <form id="pdf-form">
+            <div class="form-group" style="margin-bottom: 16px;">
+                <label for="firstName" class="form-label">Prénom</label>
+                <input type="text" id="firstName" name="firstName" class="form-input" required>
+            </div>
+            <div class="form-group" style="margin-bottom: 16px;">
+                <label for="lastName" class="form-label">Nom</label>
+                <input type="text" id="lastName" name="lastName" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label for="address" class="form-label">Adresse postale</label>
+                <input type="text" id="address" name="address" class="form-input" required>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" data-close-modal>Annuler</button>
+                <button type="submit" class="btn btn-primary">Générer le PDF</button>
+            </div>
+        </form>
+    </div>
+  </div>
+
+
+  <script>
+    // Background hex grid
+    (function(){
+      const c = document.getElementById('bg-canvas'); if(!c) return;
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect(); c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,rect.width,rect.height);
+        const size=24,hexW=2*size,hexH=Math.sqrt(3)*size,stepX=hexW*3/4;
+        ctx.strokeStyle='rgba(124,58,237,0.10)'; ctx.lineWidth=1;
+        for(let r=0;r*hexH<rect.height+hexH;r++) for(let col=0;col*stepX<rect.width+hexW;col++){
+          const x=col*stepX, y=r*hexH+(col%2?hexH/2:0);
+          ctx.beginPath();
+          for(let i=0;i<6;i++){ const a=2*Math.PI/6*i,px=x+size*Math.cos(a),py=y+size*Math.sin(a); if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py); }
+          ctx.closePath(); ctx.stroke();
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true}); draw();
+    })();
+  </script>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const startBtn = document.getElementById('start-btn');
+        const exportBtn = document.getElementById('export-btn');
+        const statusText = document.getElementById('status-text');
+        const pingResultEl = document.getElementById('ping-result');
+        const downloadResultEl = document.getElementById('download-result');
+        const uploadResultEl = document.getElementById('upload-result');
+        const speedValueEl = document.getElementById('speed-value');
+        const gaugeWrapper = document.getElementById('gauge-wrapper');
+        const liquidFill = document.getElementById('liquid-fill');
+        const liquidWave = document.getElementById('liquid-wave');
+        
+        // Modal elements
+        const pdfModal = document.getElementById('pdf-modal');
+        const pdfForm = document.getElementById('pdf-form');
+        const closeTriggers = document.querySelectorAll('[data-close-modal]');
+
+        let testState = 'idle';
+        let animationFrameId;
+
+        const resetUI = () => {
+            statusText.textContent = 'Prêt à lancer le test';
+            pingResultEl.textContent = '--';
+            downloadResultEl.textContent = '--';
+            uploadResultEl.textContent = '--';
+            pingResultEl.classList.remove('animate-in');
+            downloadResultEl.classList.remove('animate-in');
+            uploadResultEl.classList.remove('animate-in');
+            speedValueEl.textContent = '--';
+            updateGauge(0, true);
+            if (liquidWave) liquidWave.setAttribute('d', '');
+            startBtn.disabled = false;
+            startBtn.textContent = 'Lancer le Test';
+            gaugeWrapper.classList.remove('is-active');
+            exportBtn.style.display = 'none';
+        };
+
+        const updateGauge = (speed, isReset = false) => {
+            const maxSpeed = 1000;
+            const logSpeed = speed > 1 ? Math.log10(speed) * (maxSpeed / 3) : 0;
+            const percentage = Math.min(logSpeed / maxSpeed, 1);
+            
+            const gaugeHeight = 260;
+            const yPos = gaugeHeight * (1 - percentage);
+
+            liquidFill.style.transition = isReset ? 'y 0.6s ease' : 'y 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+            liquidFill.setAttribute('y', yPos);
+            
+            speedValueEl.textContent = speed > 0 ? speed.toFixed(1) : '0';
+
+            if (yPos < 165) {
+                gaugeWrapper.classList.add('is-active');
+            } else {
+                gaugeWrapper.classList.remove('is-active');
+            }
+        };
+        
+        const runTestAnimation = (duration, targetSpeed) => {
+            return new Promise(resolve => {
+                const startTime = Date.now();
+                let wavePhase = 0;
+                
+                const animate = () => {
+                    const elapsedTime = Date.now() - startTime;
+                    const progress = Math.min(elapsedTime / duration, 1);
+                    
+                    const easeOutProgress = Math.sin(progress * Math.PI * 0.5);
+                    const fluctuation = (targetSpeed / 20) * (Math.random() - 0.5) * (1 - progress);
+                    let currentSpeed = Math.max(0, targetSpeed * easeOutProgress + fluctuation);
+                    updateGauge(currentSpeed);
+
+                    const maxSpeed = 1000;
+                    const logSpeed = currentSpeed > 1 ? Math.log10(currentSpeed) * (maxSpeed / 3) : 0;
+                    const percentage = Math.min(logSpeed / maxSpeed, 1);
+                    const yPos = 260 * (1 - percentage);
+                    
+                    wavePhase += 2;
+                    const amplitude = progress > 0.1 ? 5 : progress * 10 * 5;
+                    const frequency = 0.02;
+                    const waveLength = 150;
+                    let points = [];
+                    for (let x = -waveLength; x <= 300 + waveLength; x += 10) {
+                        const y = yPos + amplitude * Math.sin((x + wavePhase) * frequency);
+                        points.push(`L ${x},${y}`);
+                    }
+                    const path = `M -${waveLength},${yPos} ` + points.join(' ') + ` V 260 H -${waveLength} Z`;
+                    liquidWave.setAttribute('d', path);
+
+                    if (progress < 1) {
+                        animationFrameId = requestAnimationFrame(animate);
+                    } else {
+                        updateGauge(targetSpeed);
+                        liquidWave.setAttribute('d', '');
+                        resolve(targetSpeed);
+                    }
+                };
+                animationFrameId = requestAnimationFrame(animate);
+            });
+        };
+
+        const runPingTest = () => {
+            return new Promise(resolve => {
+                testState = 'ping';
+                statusText.textContent = 'Test du ping...';
+                setTimeout(() => {
+                    const ping = Math.floor(Math.random() * 45) + 5;
+                    pingResultEl.textContent = `${ping} ms`;
+                    pingResultEl.classList.add('animate-in');
+                    resolve();
+                }, 1500);
+            });
+        };
+
+        const runDownloadTest = () => {
+            testState = 'download';
+            statusText.textContent = 'Test du débit descendant...';
+            const targetDownloadSpeed = Math.random() * 450 + 50;
+            return runTestAnimation(8000, targetDownloadSpeed).then(finalSpeed => {
+                downloadResultEl.textContent = `${finalSpeed.toFixed(1)} Mbps`;
+                downloadResultEl.classList.add('animate-in');
+            });
+        };
+
+        const runUploadTest = () => {
+            testState = 'upload';
+            statusText.textContent = 'Test du débit montant...';
+            const targetUploadSpeed = Math.random() * 80 + 20;
+            return runTestAnimation(6000, targetUploadSpeed).then(finalSpeed => {
+                uploadResultEl.textContent = `${finalSpeed.toFixed(1)} Mbps`;
+                uploadResultEl.classList.add('animate-in');
+            });
+        };
+        
+        const generatePDF = (userInfo) => {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const pageW = doc.internal.pageSize.getWidth();
+
+            const formatDate = (date) => {
+                const d = date.getDate().toString().padStart(2, '0');
+                const m = (date.getMonth() + 1).toString().padStart(2, '0');
+                const y = date.getFullYear();
+                const h = date.getHours().toString().padStart(2, '0');
+                const min = date.getMinutes().toString().padStart(2, '0');
+                const s = date.getSeconds().toString().padStart(2, '0');
+                return `${d}/${m}/${y} à ${h}:${min}:${s}`;
+            };
+
+            const now = new Date();
+            const reportId = `LR-${now.getTime()}-${Math.random().toString(16).substr(2, 8).toUpperCase()}`;
+
+            // --- HEADER ---
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(22);
+            doc.text("Rapport de Test de Vitesse", pageW / 2, 20, { align: "center" });
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(10);
+            doc.setTextColor(107, 114, 128);
+            doc.text(`Date du test : ${formatDate(now)}`, pageW / 2, 30, { align: "center" });
+            doc.text(`ID du rapport : ${reportId}`, pageW / 2, 35, { align: "center" });
+            
+            // --- USER INFO ---
+            let currentY = 50;
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(20, 20, 23); // #141417
+            doc.text("Informations du titulaire de la ligne", 20, currentY);
+            currentY += 8;
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(11);
+            doc.text(`${userInfo.firstName} ${userInfo.lastName}`, 20, currentY);
+            currentY += 6;
+            doc.text(userInfo.address, 20, currentY);
+
+            // --- RESULTS BOX ---
+            const boxX = 20, boxY = currentY + 10, boxW = pageW - 40, boxH = 70;
+            doc.setFillColor(247, 248, 250); // #F7F8FA
+            doc.roundedRect(boxX, boxY, boxW, boxH, 5, 5, 'F');
+            
+            const resultY = boxY + 25;
+            const itemWidth = boxW / 3;
+
+            // Ping
+            doc.setFontSize(12);
+            doc.setTextColor(107, 114, 128);
+            doc.text("Ping", boxX + itemWidth / 2, resultY, { align: "center" });
+            doc.setFontSize(26);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(124, 58, 237); // #7C3AED
+            doc.text(pingResultEl.textContent, boxX + itemWidth / 2, resultY + 15, { align: "center" });
+
+            // Download
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(107, 114, 128);
+            doc.text("Débit descendant", boxX + itemWidth * 1.5, resultY, { align: "center" });
+            doc.setFontSize(26);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(124, 58, 237);
+            doc.text(downloadResultEl.textContent, boxX + itemWidth * 1.5, resultY + 15, { align: "center" });
+            
+            // Upload
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(107, 114, 128);
+            doc.text("Débit montant", boxX + itemWidth * 2.5, resultY, { align: "center" });
+            doc.setFontSize(26);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(124, 58, 237);
+            doc.text(uploadResultEl.textContent, boxX + itemWidth * 2.5, resultY + 15, { align: "center" });
+
+
+            // --- FOOTER ---
+            const pageH = doc.internal.pageSize.getHeight();
+            doc.setDrawColor(233, 234, 240); // #E9EAF0
+            doc.line(20, pageH - 25, pageW - 20, pageH - 25);
+            doc.setFontSize(9);
+            doc.setTextColor(107, 114, 128);
+            doc.text("Généré par La Ruche", pageW / 2, pageH - 15, { align: "center" });
+
+            doc.save(`rapport-vitesse-la-ruche-${now.getTime()}.pdf`);
+        };
+
+
+        const startTest = async () => {
+            if (testState !== 'idle' && testState !== 'finished') return;
+            
+            cancelAnimationFrame(animationFrameId);
+            resetUI();
+            testState = 'starting';
+            startBtn.disabled = true;
+            startBtn.textContent = 'Test en cours...';
+
+            await runPingTest();
+            await runDownloadTest();
+            await runUploadTest();
+
+            testState = 'finished';
+            statusText.textContent = 'Test terminé !';
+            startBtn.disabled = false;
+            startBtn.textContent = 'Relancer le Test';
+            speedValueEl.textContent = '✓';
+            gaugeWrapper.classList.remove('is-active');
+            exportBtn.style.display = 'inline-flex';
+        };
+
+        const openModal = () => pdfModal.classList.add('is-visible');
+        const closeModal = () => pdfModal.classList.remove('is-visible');
+
+        startBtn.addEventListener('click', startTest);
+        exportBtn.addEventListener('click', openModal);
+        closeTriggers.forEach(trigger => trigger.addEventListener('click', closeModal));
+        
+        pdfForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = new FormData(pdfForm);
+            const userInfo = {
+                firstName: formData.get('firstName'),
+                lastName: formData.get('lastName'),
+                address: formData.get('address')
+            };
+            generatePDF(userInfo);
+            closeModal();
+            pdfForm.reset();
+        });
+
+        resetUI();
+    });
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

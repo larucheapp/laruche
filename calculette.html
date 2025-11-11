@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche" >
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculette</title>
+  <meta name="description" content="Un outil de calcul simple et efficace pour toutes vos opérations.">
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px; /* par défaut, peut être changé via body[data-size] */
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:center; justify-content:center;
+      padding:48px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+
+    /* Styles spécifiques à la calculette */
+    .calculator-display {
+      background-color: var(--color-bg-alt); border: 1px solid var(--color-border);
+      border-radius: var(--radius-md); padding: 16px; text-align: right;
+      font-size: 2.5rem; font-weight: 300; color: var(--color-text-primary);
+      width: 100%; overflow-x: auto; white-space: nowrap;
+    }
+    .calculator-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .calc-btn {
+      display: flex; align-items: center; justify-content: center; height: 60px;
+      font-size: 1.5rem; border-radius: var(--radius-md); border: 1px solid var(--color-border);
+      background-color: var(--color-bg); color: var(--color-text-primary); cursor: pointer;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+    .calc-btn:hover { background-color: var(--color-bg-alt); }
+    .calc-btn:active { transform: scale(0.95); }
+    .calc-btn:focus-visible{ outline:none; border-color:var(--color-violet); box-shadow:0 0 0 3px rgba(124,58,237,.2); z-index: 10; }
+    .calc-btn.operator { background-color: var(--color-bg-alt); color: var(--color-violet); font-weight: 500; }
+    .calc-btn.operator:hover { background-color: #F0E9FE; }
+    .calc-btn.equals { grid-column: span 2; background-color: var(--color-violet); border-color: var(--color-violet); color: #fff; }
+    .calc-btn.equals:hover { background-color: var(--color-violet-dark); }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="wide">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Calculette</h1>
+
+      <!-- ZONE OUTIL -->
+      <div class="generator-card" role="region" aria-label="Calculette">
+        <div id="calculator-display" class="calculator-display" role="textbox" aria-readonly="true">0</div>
+        
+        <div class="calculator-grid">
+          <!-- Row 1 -->
+          <button class="calc-btn operator" data-action="clear">C</button>
+          <button class="calc-btn operator" data-action="delete">DEL</button>
+          <button class="calc-btn operator" data-value="%">%</button>
+          <button class="calc-btn operator" data-value="/">÷</button>
+          <!-- Row 2 -->
+          <button class="calc-btn" data-value="7">7</button>
+          <button class="calc-btn" data-value="8">8</button>
+          <button class="calc-btn" data-value="9">9</button>
+          <button class="calc-btn operator" data-value="*">×</button>
+          <!-- Row 3 -->
+          <button class="calc-btn" data-value="4">4</button>
+          <button class="calc-btn" data-value="5">5</button>
+          <button class="calc-btn" data-value="6">6</button>
+          <button class="calc-btn operator" data-value="-">−</button>
+          <!-- Row 4 -->
+          <button class="calc-btn" data-value="1">1</button>
+          <button class="calc-btn" data-value="2">2</button>
+          <button class="calc-btn" data-value="3">3</button>
+          <button class="calc-btn operator" data-value="+">+</button>
+          <!-- Row 5 -->
+          <button class="calc-btn" data-value="0">0</button>
+          <button class="calc-btn" data-value=".">.</button>
+          <button class="calc-btn equals" data-action="calculate">=</button>
+        </div>
+      </div>
+      <!-- /ZONE OUTIL -->
+    </div>
+  </main>
+
+  <script>
+    // Background hex grid — NE PAS MODIFIER (doit rester visuellement identique)
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+
+        const size = 24;
+        const hexW = 2 * size;
+        const hexH = Math.sqrt(3) * size;
+        const stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)';
+        ctx.lineWidth = 1;
+
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX;
+            const y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i;
+              const px = x + size * Math.cos(a);
+              const py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+
+    // Logique de la calculette
+    document.addEventListener('DOMContentLoaded', () => {
+      const display = document.getElementById('calculator-display');
+      const buttons = document.querySelector('.calculator-grid');
+
+      let firstValue = '';
+      let operator = '';
+      let secondValue = '';
+      let shouldResetDisplay = false;
+
+      function updateDisplay(value) {
+        display.textContent = value;
+      }
+      
+      function resetCalculator() {
+        firstValue = '';
+        operator = '';
+        secondValue = '';
+        shouldResetDisplay = false;
+        updateDisplay('0');
+      }
+
+      function calculate() {
+        if (operator === '' || firstValue === '') return;
+        if (secondValue === '') secondValue = firstValue;
+
+        const a = parseFloat(firstValue);
+        const b = parseFloat(secondValue);
+        let result = 0;
+        
+        switch (operator) {
+          case '+': result = a + b; break;
+          case '-': result = a - b; break;
+          case '*': result = a * b; break;
+          case '%': result = a % b; break;
+          case '/': 
+            if (b === 0) {
+              updateDisplay('Erreur');
+              return;
+            }
+            result = a / b;
+            break;
+          default: return;
+        }
+        
+        result = parseFloat(result.toPrecision(15));
+        updateDisplay(result.toString());
+        
+        firstValue = result.toString();
+        secondValue = '';
+        operator = '';
+        shouldResetDisplay = true;
+      }
+      
+      buttons.addEventListener('click', (event) => {
+        const { target } = event;
+        if (!target.matches('button')) return;
+
+        if(display.textContent === 'Erreur') resetCalculator();
+
+        const value = target.dataset.value;
+        const action = target.dataset.action;
+
+        if (value) {
+          if (['+', '-', '*', '/', '%'].includes(value)) {
+            if (operator && secondValue) {
+                calculate();
+                if(display.textContent === 'Erreur') return;
+            }
+            if(firstValue === '' || shouldResetDisplay) firstValue = display.textContent;
+            operator = value;
+            shouldResetDisplay = true;
+          } else {
+            if (display.textContent === '0' || shouldResetDisplay) {
+              updateDisplay(value === '.' ? '0.' : value);
+              shouldResetDisplay = false;
+            } else {
+              if (value === '.' && display.textContent.includes('.')) return;
+              updateDisplay(display.textContent + value);
+            }
+
+            if (operator === '') {
+              firstValue = display.textContent;
+            } else {
+              secondValue = display.textContent;
+            }
+          }
+        }
+
+        if (action) {
+          switch (action) {
+            case 'clear':
+              resetCalculator();
+              break;
+            case 'delete':
+              if(shouldResetDisplay) return;
+              if (display.textContent.length > 1) {
+                updateDisplay(display.textContent.slice(0, -1));
+              } else {
+                updateDisplay('0');
+              }
+              if (operator === '') {
+                firstValue = display.textContent;
+              } else {
+                secondValue = display.textContent;
+              }
+              break;
+            case 'calculate':
+              calculate();
+              break;
+          }
+        }
+      });
+    });
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

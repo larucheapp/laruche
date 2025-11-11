@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Synthèse Vocale Neuronale — La Ruche</title>
+  <meta name="description" content="Convertissez du texte en voix de haute qualité grâce à un modèle d'IA neuronal spécialisé pour le français. Génération 100% locale.">
+  
+  <style>
+    :root {
+      --color-bg: #FFFFFF;
+      --color-bg-alt: #F7F8FA;
+      --color-border: #E9EAF0;
+      --color-text-primary: #141417;
+      --color-text-secondary: #6B7280;
+      --color-violet: #7C3AED;
+      --color-violet-dark: #6D28D9;
+      --radius-md: 12px;
+      --radius-lg: 14px;
+      --tool-max-w: 480px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; background-color: var(--color-bg); }
+    body {
+      height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--color-text-primary); line-height: 1.5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    body[data-size="default"] { --tool-max-w: 520px; }
+    body[data-size="wide"] { --tool-max-w: 960px; }
+    body[data-size="xl"] { --tool-max-w: 1200px; }
+
+    #bg-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; }
+
+    .app-header {
+      flex-shrink: 0; background: var(--color-bg-alt); border-bottom: 1px solid var(--color-border);
+      padding: 0 24px; display: flex; align-items: center; height: 70px;
+    }
+    .app-header a { display: inline-flex; align-items: center; }
+    .logo-img { height: 70px; width: auto; vertical-align: middle; }
+
+    .main-content {
+      flex-grow: 1; display: flex; justify-content: center;
+      padding: 48px 24px; overflow-y: auto;
+    }
+    .tool-wrapper { display: flex; flex-direction: column; align-items: center; position: relative; width: 100%; max-width: var(--tool-max-w); }
+    .tool-title {
+      font-size: 1.75rem; font-weight: 600; padding: 12px 28px;
+      background: linear-gradient(45deg, var(--color-violet), var(--color-violet-dark));
+      color: #fff; border-radius: var(--radius-md); margin-bottom: -20px; position: relative; z-index: 5;
+      box-shadow: 0 4px 14px -4px rgba(124, 58, 237, .4);
+      text-align: center;
+    }
+    .generator-card {
+      background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+      padding: 28px; padding-top: 40px; width: 100%;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display: flex; flex-direction: column; gap: 24px;
+      position: relative;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-label { font-weight: 500; color: var(--color-text-primary); }
+    .form-textarea {
+      width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+      font-size: 1rem; color: var(--color-text-primary); background: var(--color-bg);
+      transition: border-color .2s, box-shadow .2s;
+      resize: vertical; min-height: 180px; font-family: inherit;
+    }
+    .form-textarea:focus { outline: none; border-color: var(--color-violet); box-shadow: 0 0 0 3px rgba(124, 58, 237, .2); }
+    
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      font-weight: 500; padding: 12px 18px; border-radius: var(--radius-md); border: none; cursor: pointer;
+      transition: background-color .2s, box-shadow .2s, opacity .2s; font-size: 1rem;
+      text-decoration: none;
+    }
+    .btn:focus-visible { outline: 2px solid transparent; outline-offset: 2px; box-shadow: 0 0 0 3px rgba(124, 58, 237, .4); }
+    .btn-primary { background: var(--color-violet); color: #fff; width: 100%; }
+    .btn-primary:hover:not(:disabled) { background: var(--color-violet-dark); }
+    .btn-primary:disabled { background: #A78BFA; cursor: not-allowed; opacity: .7; }
+    .btn-secondary {
+        background: var(--color-bg-alt);
+        color: var(--color-text-primary);
+        border: 1px solid var(--color-border);
+        width: 100%;
+    }
+    .btn-secondary:hover:not(:disabled) {
+        background: #F0F1F3;
+    }
+    
+    .status-text { font-size: 14px; color: var(--color-text-secondary); text-align: center; min-height: 21px; }
+    
+    #audio-output {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-top: 16px;
+      max-height: 35vh;
+      overflow-y: auto;
+      padding-right: 10px;
+      margin-right: -10px;
+    }
+    #audio-output::-webkit-scrollbar {
+        width: 6px;
+    }
+    #audio-output::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    #audio-output::-webkit-scrollbar-thumb {
+        background-color: var(--color-border);
+        border-radius: 3px;
+    }
+
+    .audio-result-item {
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background-color: var(--color-bg-alt);
+      animation: fadeIn .5s ease-out;
+    }
+    .audio-result-text {
+      font-style: italic;
+      color: var(--color-text-secondary);
+      border-left: 3px solid var(--color-violet);
+      padding-left: 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.95rem;
+    }
+    .audio-result-item audio { width: 100%; }
+    
+    #clear-btn-container {
+      display: none;
+      margin-top: 24px;
+      border-top: 1px solid var(--color-border);
+      padding-top: 24px;
+    }
+
+    .loader-icon {
+      width: 20px; height: 20px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    .loading-overlay {
+        position: absolute;
+        inset: 0;
+        background-color: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(2px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        border-radius: var(--radius-lg);
+        transition: opacity .3s ease, visibility .3s ease;
+        opacity: 0;
+        visibility: hidden;
+    }
+    .loading-overlay.visible {
+        opacity: 1;
+        visibility: visible;
+    }
+    .loader-icon-large {
+        width: 48px;
+        height: 48px;
+        border: 4px solid rgba(124, 58, 237, 0.2);
+        border-top-color: var(--color-violet);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="default">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Synthèse Vocale Neuronale</h1>
+      <div class="generator-card" role="region" aria-label="Synthèse vocale neuronale">
+        
+        <div class="loading-overlay" id="loading-overlay">
+          <div class="loader-icon-large"></div>
+        </div>
+        
+        <div class="form-group">
+          <label for="text-to-speak" class="form-label">Texte à convertir</label>
+          <textarea id="text-to-speak" class="form-textarea" placeholder="Saisissez votre texte ici pour entendre la magie d'une voix naturelle..."></textarea>
+        </div>
+        
+        <div class="status-text" id="status">Initialisation du modèle de voix...</div>
+
+        <button id="generate-btn" class="btn btn-primary" disabled>
+          <span id="btn-text">Chargement du modèle</span>
+          <div id="btn-loader" class="loader-icon"></div>
+        </button>
+
+        <div id="audio-output"></div>
+
+        <div id="clear-btn-container">
+            <button id="clear-btn" class="btn btn-secondary">Effacer les résultats</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1';
+
+    const textInput = document.getElementById('text-to-speak');
+    const generateBtn = document.getElementById('generate-btn');
+    const statusText = document.getElementById('status');
+    const audioOutput = document.getElementById('audio-output');
+    const btnText = document.getElementById('btn-text');
+    const btnLoader = document.getElementById('btn-loader');
+    const clearBtnContainer = document.getElementById('clear-btn-container');
+    const clearBtn = document.getElementById('clear-btn');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    
+    class TTSPipeline {
+        static instance = null;
+        static async getInstance(progress_callback = null) {
+            if (this.instance === null) {
+                this.instance = pipeline('text-to-speech', 'Xenova/mms-tts-fra', { progress_callback });
+            }
+            return this.instance;
+        }
+    }
+    
+    let synthesizer = null;
+    let isReady = false;
+
+    function writeString(view, offset, string) {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+        }
+    }
+
+    function encodeWAV(samples, sampleRate) {
+        const buffer = new ArrayBuffer(44 + samples.length * 2);
+        const view = new DataView(buffer);
+        writeString(view, 0, 'RIFF');
+        view.setUint32(4, 36 + samples.length * 2, true);
+        writeString(view, 8, 'WAVE');
+        writeString(view, 12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, 1, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * 2, true);
+        view.setUint16(32, 2, true);
+        view.setUint16(34, 16, true);
+        writeString(view, 36, 'data');
+        view.setUint32(40, samples.length * 2, true);
+        let offset = 44;
+        for (let i = 0; i < samples.length; i++, offset += 2) {
+            const s = Math.max(-1, Math.min(1, samples[i]));
+            view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+        }
+        return new Blob([view], { type: 'audio/wav' });
+    }
+
+    async function initializeModel() {
+        try {
+            statusText.textContent = 'Téléchargement du modèle de voix français...';
+            synthesizer = await TTSPipeline.getInstance((data) => {
+                if (data.status === 'progress') {
+                    const progress = (data.progress).toFixed(2);
+                    statusText.textContent = `Téléchargement... (${progress}%)`;
+                } else if (data.status === 'ready') {
+                    statusText.textContent = 'Modèle prêt. Finalisation...';
+                } else {
+                    statusText.textContent = data.status.replace(/_/g, ' ');
+                }
+            });
+            isReady = true;
+            statusText.textContent = 'Prêt à générer.';
+            generateBtn.disabled = false;
+            btnText.textContent = 'Générer & Écouter';
+            btnLoader.style.display = 'none';
+        } catch (error) {
+            console.error('Failed to initialize model:', error);
+            statusText.textContent = 'Erreur d\'initialisation du modèle.';
+            btnText.textContent = 'Erreur';
+        }
+    }
+
+    async function generateAndPlay() {
+        const textToConvert = textInput.value.trim();
+        if (!isReady || !textToConvert) {
+            statusText.textContent = 'Veuillez saisir un texte à convertir.';
+            return;
+        }
+
+        generateBtn.disabled = true;
+        textInput.disabled = true;
+        loadingOverlay.classList.add('visible');
+        btnText.textContent = 'Génération en cours';
+        btnLoader.style.display = 'block';
+        statusText.textContent = 'Veuillez patienter, la génération peut prendre un moment...';
+        
+        try {
+            const out = await synthesizer(textToConvert);
+            const sampleRate = out.sampling_rate;
+            const blob = encodeWAV(out.audio, sampleRate);
+            const url = URL.createObjectURL(blob);
+
+            const resultItem = document.createElement('div');
+            resultItem.className = 'audio-result-item';
+            
+            const textElement = document.createElement('p');
+            textElement.className = 'audio-result-text';
+            textElement.textContent = `"${textToConvert}"`;
+
+            const audio = document.createElement('audio');
+            audio.src = url;
+            audio.controls = true;
+            audio.autoplay = true;
+
+            const downloadLink = document.createElement('a');
+            downloadLink.href = url;
+            const safeFilename = textToConvert.substring(0, 20).replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            downloadLink.download = `laruche_${safeFilename}.wav`;
+            downloadLink.textContent = 'Télécharger le fichier .wav';
+            downloadLink.classList.add('btn', 'btn-secondary');
+            
+            resultItem.appendChild(textElement);
+            resultItem.appendChild(audio);
+            resultItem.appendChild(downloadLink);
+
+            audioOutput.prepend(resultItem);
+            
+            textInput.value = '';
+            statusText.textContent = 'Génération terminée !';
+            clearBtnContainer.style.display = 'block';
+
+        } catch (error) {
+            console.error('Error during TTS generation:', error);
+            statusText.textContent = 'Une erreur est survenue lors de la génération.';
+        } finally {
+            generateBtn.disabled = false;
+            textInput.disabled = false;
+            loadingOverlay.classList.remove('visible');
+            btnText.textContent = 'Générer & Écouter';
+            btnLoader.style.display = 'none';
+        }
+    }
+
+    function clearResults() {
+        audioOutput.innerHTML = '';
+        clearBtnContainer.style.display = 'none';
+        statusText.textContent = 'Prêt à générer.';
+    }
+
+    // Event Listeners
+    generateBtn.addEventListener('click', generateAndPlay);
+    clearBtn.addEventListener('click', clearResults);
+    
+    // Initial load
+    initializeModel();
+
+    // --- BACKGROUND SCRIPT ---
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+
+        const size = 24;
+        const hexW = 2 * size;
+        const hexH = Math.sqrt(3) * size;
+        const stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)';
+        ctx.lineWidth = 1;
+
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX;
+            const y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i;
+              const px = x + size * Math.cos(a);
+              const py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

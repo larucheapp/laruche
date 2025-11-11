@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche" >
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chronomètre de Précision</title>
+  <meta name="description" content="Un chronomètre stylé et précis avec gestion des tours et exportation des résultats.">
+  <!-- jsPDF libraries for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --color-green: #16A34A;
+      --color-red: #DC2626;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px; /* par défaut, peut être changé via body[data-size] */
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:center; justify-content:center;
+      padding:48px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:500; padding:10px 16px; border-radius:var(--radius-md); border:none; cursor:pointer;
+      transition:background-color .2s, box-shadow .2s, opacity .2s; font-size:14px;
+      width: 100%;
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn-primary{background:var(--color-violet); color:#fff}
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark)}
+    .btn-primary:disabled{background:#A78BFA; cursor:not-allowed; opacity: 0.7;}
+
+    .btn-secondary {
+        background-color: var(--color-bg-alt);
+        color: var(--color-text-secondary);
+        border: 1px solid var(--color-border);
+    }
+    .btn-secondary:hover:not(:disabled) {
+        background-color: #f0f1f3;
+    }
+    .btn-secondary:disabled {
+        background-color: var(--color-bg-alt);
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    
+    /* Styles spécifiques au Chronomètre */
+    .timer-display {
+        font-family: 'SF Mono', 'Fira Code', 'Roboto Mono', monospace;
+        font-size: 3.5rem;
+        font-weight: 500;
+        text-align: center;
+        color: var(--color-text-primary);
+        letter-spacing: -2px;
+    }
+    .timer-display .milliseconds {
+        font-size: 2rem;
+        color: var(--color-text-secondary);
+    }
+    .timer-controls {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    .laps-container {
+        max-height: 250px;
+        overflow-y: auto;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        background-color: var(--color-bg-alt);
+    }
+
+    .laps-header, .lap-item {
+        display: grid;
+        grid-template-columns: 60px 1fr 1fr;
+        padding: 10px 16px;
+        align-items: center;
+        font-size: 14px;
+    }
+    
+    .laps-header {
+        font-weight: 500;
+        color: var(--color-text-secondary);
+        border-bottom: 1px solid var(--color-border);
+        position: sticky;
+        top: 0;
+        background-color: var(--color-bg-alt);
+    }
+    
+    .lap-item {
+        border-bottom: 1px solid var(--color-border);
+    }
+    .lap-item:last-child {
+        border-bottom: none;
+    }
+
+    .lap-item .lap-num {
+        color: var(--color-text-secondary);
+    }
+    .lap-item .lap-time, .lap-item .total-time {
+        font-family: 'SF Mono', 'Fira Code', 'Roboto Mono', monospace;
+        font-weight: 500;
+    }
+
+    .lap-fastest .lap-time { color: var(--color-green); }
+    .lap-slowest .lap-time { color: var(--color-red); }
+
+    .app-actions {
+        display: flex;
+        justify-content: flex-end;
+    }
+
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="default">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Chronomètre</h1>
+
+      <!-- ZONE OUTIL -->
+      <div class="generator-card" role="region" aria-label="Chronomètre">
+        <div class="timer-display" aria-live="off" aria-atomic="true">
+            <span>00:00.</span><span class="milliseconds">00</span>
+        </div>
+
+        <div class="timer-controls">
+            <button id="lapResetBtn" class="btn btn-secondary">Tour</button>
+            <button id="startStopBtn" class="btn btn-primary">Démarrer</button>
+        </div>
+
+        <div id="lapsContainer" class="laps-container" style="display: none;">
+            <div class="laps-header">
+                <span>Tour</span>
+                <span>Temps</span>
+                <span>Total</span>
+            </div>
+            <ol id="lapsList" class="laps-list" reversed></ol>
+        </div>
+        
+        <div class="app-actions">
+             <button id="exportBtn" class="btn btn-secondary" style="width: auto;">Exporter en PDF</button>
+        </div>
+      </div>
+      <!-- /ZONE OUTIL -->
+    </div>
+  </main>
+
+  <script>
+    // Background hex grid
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+        const size = 24, hexW = 2 * size, hexH = Math.sqrt(3) * size, stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)'; ctx.lineWidth = 1;
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX, y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){ const a = 2 * Math.PI / 6 * i, px = x + size * Math.cos(a), py = y + size * Math.sin(a); if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+
+    // Logique du Chronomètre
+    document.addEventListener('DOMContentLoaded', () => {
+        const timerDisplay = document.querySelector('.timer-display');
+        const startStopBtn = document.getElementById('startStopBtn');
+        const lapResetBtn = document.getElementById('lapResetBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const lapsList = document.getElementById('lapsList');
+        const lapsContainer = document.getElementById('lapsContainer');
+        
+        let state = 'idle'; // idle, running, paused
+        let startTime = 0;
+        let elapsedTime = 0;
+        let lastLapTime = 0;
+        let laps = [];
+        let timerInterval = null;
+
+        const formatTime = (time, forDisplay = true) => {
+            const date = new Date(time);
+            const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+            const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+            const milliseconds = String(Math.floor(date.getUTCMilliseconds() / 10)).padStart(2, '0');
+            if (forDisplay) {
+                return `<span>${minutes}:${seconds}.</span><span class="milliseconds">${milliseconds}</span>`;
+            }
+            return `${minutes}:${seconds}.${milliseconds}`;
+        };
+
+        const updateDisplay = () => {
+            const currentTime = Date.now();
+            timerDisplay.innerHTML = formatTime(elapsedTime + (currentTime - startTime));
+        };
+
+        const renderLaps = () => {
+            lapsContainer.style.display = laps.length > 0 ? 'block' : 'none';
+            lapsList.innerHTML = '';
+            
+            if (laps.length < 2) {
+                laps.forEach(lap => lap.class = '');
+            } else {
+                let fastestLapTime = Infinity;
+                let slowestLapTime = -Infinity;
+                laps.forEach(lap => {
+                    if (lap.lapTime < fastestLapTime) fastestLapTime = lap.lapTime;
+                    if (lap.lapTime > slowestLapTime) slowestLapTime = lap.lapTime;
+                });
+                
+                laps.forEach(lap => {
+                    if (laps.length > 1 && lap.lapTime === fastestLapTime) lap.class = 'lap-fastest';
+                    else if (laps.length > 1 && lap.lapTime === slowestLapTime) lap.class = 'lap-slowest';
+                    else lap.class = '';
+                });
+            }
+
+            laps.slice().reverse().forEach((lap, index) => {
+                const li = document.createElement('li');
+                li.className = `lap-item ${lap.class}`;
+                li.innerHTML = `
+                    <span class="lap-num">${laps.length - index}</span>
+                    <span class="lap-time">${formatTime(lap.lapTime, false)}</span>
+                    <span class="total-time">${formatTime(lap.totalTime, false)}</span>
+                `;
+                lapsList.appendChild(li);
+            });
+             lapsList.start = laps.length;
+        };
+        
+        const updateButtons = () => {
+            if (state === 'idle') {
+                startStopBtn.textContent = 'Démarrer';
+                lapResetBtn.textContent = 'Tour';
+                lapResetBtn.disabled = true;
+                exportBtn.disabled = true;
+                exportBtn.textContent = 'Exporter en PDF';
+            } else if (state === 'running') {
+                startStopBtn.textContent = 'Stop';
+                lapResetBtn.textContent = 'Tour';
+                lapResetBtn.disabled = false;
+                exportBtn.disabled = laps.length === 0;
+            } else if (state === 'paused') {
+                startStopBtn.textContent = 'Reprendre';
+                lapResetBtn.textContent = 'Réinitialiser';
+                lapResetBtn.disabled = false;
+                exportBtn.disabled = laps.length === 0;
+            }
+        };
+
+        const handleStartStop = () => {
+            if (state === 'idle' || state === 'paused') {
+                state = 'running';
+                startTime = Date.now();
+                timerInterval = setInterval(updateDisplay, 10);
+                timerDisplay.setAttribute('aria-live', 'off');
+            } else if (state === 'running') {
+                state = 'paused';
+                elapsedTime += Date.now() - startTime;
+                clearInterval(timerInterval);
+                timerDisplay.setAttribute('aria-live', 'polite');
+            }
+            updateButtons();
+        };
+
+        const handleLapReset = () => {
+            if (state === 'running') {
+                const currentTime = Date.now();
+                const totalTime = elapsedTime + (currentTime - startTime);
+                const lapTime = totalTime - lastLapTime;
+                lastLapTime = totalTime;
+                laps.push({ lapTime, totalTime, class: '' });
+                renderLaps();
+                exportBtn.disabled = false;
+            } else if (state === 'paused') {
+                state = 'idle';
+                elapsedTime = 0;
+                lastLapTime = 0;
+                laps = [];
+                timerDisplay.innerHTML = formatTime(0);
+                renderLaps();
+                updateButtons();
+            }
+        };
+
+        const handleExport = () => {
+            if (laps.length === 0) return;
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            const pageW = doc.internal.pageSize.getWidth();
+            const pageH = doc.internal.pageSize.getHeight();
+
+            // --- Stats Calculation ---
+            const totalSessionTime = laps[laps.length - 1].totalTime;
+            const fastestLap = laps.reduce((min, lap) => lap.lapTime < min ? lap.lapTime : min, Infinity);
+            const slowestLap = laps.reduce((max, lap) => lap.lapTime > max ? lap.lapTime : max, -Infinity);
+
+            // --- Background Gradient ---
+            const gradient = (doc) => {
+                const startColor = [44, 26, 77]; // Dark Violet
+                const endColor = [20, 20, 23];   // Near Black
+                for (let i = 0; i < pageH; i++) {
+                    const r = startColor[0] + (i / pageH) * (endColor[0] - startColor[0]);
+                    const g = startColor[1] + (i / pageH) * (endColor[1] - startColor[1]);
+                    const b = startColor[2] + (i / pageH) * (endColor[2] - startColor[2]);
+                    doc.setFillColor(r, g, b);
+                    doc.rect(0, i, pageW, 1, 'F');
+                }
+            };
+            gradient(doc);
+
+            // --- Header ---
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(24);
+            doc.setTextColor('#FFFFFF');
+            doc.text("RÉSULTATS DU CHRONOMÈTRE", pageW / 2, 22, { align: 'center' });
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor('#A8A29E'); // secondary text
+            doc.text(new Date().toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' }), pageW / 2, 30, { align: 'center' });
+
+            // --- Key Stats Dashboard ---
+            const stats = [
+                { label: 'Temps Total', value: formatTime(totalSessionTime, false), color: '#FFFFFF' },
+                { label: 'Tours', value: laps.length, color: '#FFFFFF' },
+                { label: 'Meilleur Tour', value: formatTime(fastestLap, false), color: '#4ADE80' }, // Bright Green
+                { label: 'Pire Tour', value: formatTime(slowestLap, false), color: '#F87171' }, // Bright Red
+            ];
+            
+            const statBoxWidth = (pageW - 30) / 4;
+            stats.forEach((stat, i) => {
+                const x = 15 + (i * statBoxWidth);
+                doc.setFontSize(10);
+                doc.setTextColor('#A8A29E');
+                doc.text(stat.label, x, 45);
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(16);
+                doc.setTextColor(stat.color);
+                doc.text(String(stat.value), x, 54);
+            });
+            doc.setFont('helvetica', 'normal');
+           
+            // --- Table ---
+            const tableData = laps.map((lap, index) => [
+                index + 1,
+                formatTime(lap.lapTime, false),
+                formatTime(lap.totalTime, false)
+            ]);
+
+            doc.autoTable({
+                startY: 70,
+                head: [['Tour', 'Temps du Tour', 'Temps Total']],
+                body: tableData,
+                theme: 'striped',
+                headStyles: {
+                    fillColor: [124, 58, 237],
+                    textColor: [255, 255, 255],
+                    fontStyle: 'bold'
+                },
+                styles: {
+                    fillColor: false, // Transparent cells
+                    textColor: [241, 245, 249],
+                    font: 'courier',
+                    fontStyle: 'bold'
+                },
+                alternateRowStyles: {
+                    fillColor: [255, 255, 255, 0.05]
+                },
+                didParseCell: (data) => {
+                    const lapIndex = data.row.index;
+                    const lap = laps[lapIndex];
+                    if (lap && data.column.index === 1) { // Only color the lap time column
+                        if (lap.class === 'lap-fastest') {
+                            data.cell.styles.textColor = '#4ADE80';
+                        } else if (lap.class === 'lap-slowest') {
+                             data.cell.styles.textColor = '#F87171';
+                        }
+                    }
+                }
+            });
+
+            // --- Footer ---
+            doc.setFontSize(9);
+            doc.setTextColor('#A8A29E');
+            doc.text('Généré avec La Ruche', pageW / 2, pageH - 10, { align: 'center' });
+
+            doc.save('chronometre-resultats-laruche.pdf');
+        };
+
+        startStopBtn.addEventListener('click', handleStartStop);
+        lapResetBtn.addEventListener('click', handleLapReset);
+        exportBtn.addEventListener('click', handleExport);
+
+        // Init
+        updateButtons();
+    });
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

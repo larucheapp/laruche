@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Supprimer l'arrière-plan - La Ruche</title>
+  <meta name="description" content="Détourage IA local — vos fichiers ne quittent jamais votre appareil.">
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --color-green: #10B981;
+      --color-red: #EF4444;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px; /* par défaut, peut être changé via body[data-size] */
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:center; justify-content:center;
+      padding:48px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+    .form-group{display:flex; flex-direction:column; gap:8px}
+    .form-label{font-weight:500; color:var(--color-text-primary)}
+    .form-input{
+      width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      font-size:1rem; color:var(--color-text-primary); background:var(--color-bg);
+      transition:border-color .2s, box-shadow .2s;
+    }
+    .form-input:focus{outline:none; border-color:var(--color-violet); box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+    .actions{display:flex; justify-content:flex-end; gap:12px}
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:500; padding:10px 16px; border-radius:var(--radius-md);
+      border: 1px solid var(--color-border);
+      background-color: var(--color-bg);
+      color: var(--color-text-primary);
+      cursor:pointer;
+      transition: all .2s;
+    }
+    .btn:hover:not(:disabled){
+      background-color: var(--color-bg-alt);
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn-primary{
+      background:var(--color-violet);
+      color:#fff;
+      border-color: var(--color-violet);
+    }
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark); border-color: var(--color-violet-dark);}
+    .btn-primary:disabled{background:#A78BFA; border-color: #A78BFA; cursor:not-allowed}
+    .status-text{font-size:14px; color:var(--color-text-secondary); text-align:center; min-height:21px}
+
+    /* ===== STYLES SPÉCIFIQUES À L'OUTIL ===== */
+    .tool-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 24px; }
+    @media (max-width: 900px) { .tool-grid { grid-template-columns: 1fr; } }
+    .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+    .dropzone {
+      position: relative; width: 100%; aspect-ratio: 16 / 10; display: grid; place-items: center;
+      border: 2px dashed var(--color-border); border-radius: var(--radius-lg); color: var(--color-text-secondary);
+      background-color: var(--color-bg-alt); cursor: pointer; text-align: center;
+      transition: border-color .2s ease, background-color .2s ease, transform .2s ease;
+    }
+    .dropzone.drag { border-color: var(--color-violet); background-color: #f5f3ff; transform: scale(1.01); }
+    .dropzone input { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+    .dropzone .h1 { font-size: 1.1rem; font-weight: 600; margin-bottom: 4px; color: var(--color-text-primary); }
+
+    .preview { position: relative; width: 100%; aspect-ratio: 16/10; border-radius: var(--radius-lg); overflow: hidden; background: #e9eaf0; user-select: none; border: 1px solid var(--color-border); }
+    .preview img, .preview canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+    .afterLayer { position: absolute; inset: 0; pointer-events: none; clip-path: inset(0 0 0 100%); }
+    .handle { position: absolute; top: 0; bottom: 0; width: 4px; left: 100%; transform: translateX(-50%); background: var(--color-violet); box-shadow: 0 0 8px rgba(0,0,0,.2); pointer-events: none; opacity: 0; cursor: ew-resize; }
+    .handle.show { opacity: 1; transition: opacity .25s ease; }
+    #roiCanvas { pointer-events: auto; cursor: crosshair; }
+
+    .footerLine { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--color-text-secondary); }
+    .status { display: flex; align-items: center; gap: 8px; }
+    .dot { width: 8px; height: 8px; border-radius: 99px; background: var(--color-text-secondary); transition: background .3s; }
+
+    /* NOUVEAU: Sélecteur de qualité stylisé */
+    .quality-selector { display: flex; width: 100%; }
+    .btn-quality {
+      flex: 1; padding: 10px 14px; font-size: 14px; font-weight: 500;
+      border: 1px solid var(--color-border); background-color: var(--color-bg);
+      color: var(--color-text-primary); cursor: pointer;
+      transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+    }
+    .btn-quality:first-child {
+      border-top-left-radius: var(--radius-md); border-bottom-left-radius: var(--radius-md);
+      border-right-width: 0.5px;
+    }
+    .btn-quality:last-child {
+      border-top-right-radius: var(--radius-md); border-bottom-right-radius: var(--radius-md);
+      border-left-width: 0.5px;
+    }
+    .btn-quality:hover:not(.active) { background-color: var(--color-bg-alt); }
+    .btn-quality.active {
+      background-color: var(--color-violet); color: #fff;
+      border-color: var(--color-violet); cursor: default; z-index: 1;
+    }
+    .btn-quality:focus-visible {
+      outline: none; box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.4);
+      z-index: 2; position: relative;
+    }
+
+    #overlay, #done { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(8px); z-index: 50; padding: 24px; }
+    #overlay.show, #done.show { display: flex; }
+    
+    /* NOUVEAU: Loader professionnel */
+    #overlay { flex-direction: column; gap: 18px; }
+    #overlayText { font-weight: 500; color: var(--color-text-primary); }
+    .loader-wrapper {
+      width: 240px;
+      height: 6px;
+      background-color: var(--color-violet);
+      border-radius: 99px;
+      overflow: hidden;
+      position: relative;
+    }
+    .loader-wrapper::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+      animation: loader-shimmer 1.5s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+    }
+    @keyframes loader-shimmer {
+      from { transform: translateX(-100%); }
+      to { transform: translateX(100%); }
+    }
+
+    #done .generator-card { padding: 28px; width: 100%; max-width: 420px; text-align: center; }
+    .ok { width: 42px; height: 42px; border-radius: 999px; display: grid; place-items: center; margin: 0 auto 10px; background: var(--color-green); color: #fff; font-weight: 600; font-size: 20px; box-shadow: 0 4px 14px -4px rgba(16,185,129,.4); }
+    .result-thumb { width: 100%; max-height: 200px; object-fit: contain; border-radius: var(--radius-md); border: 1px solid var(--color-border); background: var(--color-bg-alt); margin: 16px 0; }
+
+    .hidden { display: none !important; }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="wide">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Supprimer l'arrière-plan</h1>
+
+      <div class="generator-card" role="region" aria-label="Supprimer l'arrière-plan">
+        <p class="status-text" style="text-align: left; margin-bottom: 0; padding-top: 0; gap: 8px;">Détourage IA local — vos fichiers ne quittent jamais votre appareil.</p>
+        
+        <div class="tool-grid">
+          <!-- PANEL GAUCHE -->
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <div id="panel-preview" aria-live="polite">
+              <div class="dropzone" id="drop" tabindex="0" role="button" aria-label="Déposer ou sélectionner une image">
+                <div>
+                  <div class="h1">Déposez votre image</div>
+                  <div>ou cliquez pour parcourir</div>
+                </div>
+                <input id="file" type="file" accept="image/*"/>
+              </div>
+
+              <div class="preview hidden" id="preview">
+                <img id="imgBefore" alt="Image d’entrée"/>
+                <div class="afterLayer" id="afterLayer"><canvas id="afterCanvas" aria-label="Résultat du détourage"></canvas></div>
+                <div class="handle" id="handle"></div>
+                <!-- ROI canvas injecté dynamiquement via JS, id="roiCanvas" -->
+              </div>
+            </div>
+
+            <div class="footerLine">
+              <div class="status">
+                <span class="dot" id="modeDot"></span>
+                <span id="modeText">Chargement d’OpenCV…</span>
+              </div>
+              <div id="fileInfo">Aucune image</div>
+            </div>
+          </div>
+          
+          <!-- PANEL DROIT -->
+          <div style="display: flex; flex-direction: column; gap: 24px;">
+            <div class="form-group">
+              <label class="form-label">Qualité</label>
+              <!-- MODIFIÉ: select -> groupe de boutons -->
+              <div id="quality" class="quality-selector">
+                <button type="button" class="btn-quality active" data-value="medium">Moyenne</button>
+                <button type="button" class="btn-quality" data-value="high">Haute</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Actions</label>
+              <div class="toolbar">
+                <!-- MODIFIÉ: bouton primaire -->
+                <button class="btn btn-primary" id="browseBtn" type="button">Parcourir…</button>
+                <button class="btn" id="againBtn" type="button">Réinitialiser</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Traitement</label>
+              <div class="toolbar">
+                 <!-- MODIFIÉ: bouton primaire -->
+                <button class="btn btn-primary" id="run" type="button" disabled>Lancer</button>
+                <button class="btn btn-primary" id="download" type="button" disabled>Télécharger PNG</button>
+              </div>
+            </div>
+
+            <p class="status-text" style="text-align: left;">L’aperçu montre un volet avant/après. La qualité "Moyenne" redimensionne l'image pour accélérer le traitement.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- OVERLAY (Traitement) -->
+  <div id="overlay" aria-live="polite">
+    <div class="loader-wrapper"></div>
+    <div id="overlayText">Traitement en cours…</div>
+  </div>
+
+  <!-- MODAL (Succès) -->
+  <div id="done" role="dialog" aria-modal="true" aria-labelledby="doneTitle" aria-describedby="doneDesc">
+    <div class="generator-card">
+      <div class="ok">✓</div>
+      <h3 id="doneTitle" style="font-size: 1.25rem; margin-bottom: 4px;">Arrière-plan supprimé</h3>
+      <p id="doneDesc" class="status-text">Votre image est prête. Vous pouvez la télécharger ou recommencer.</p>
+      <img id="resultThumb" class="result-thumb hidden" alt="Aperçu du résultat"/>
+      <div class="toolbar" style="margin-top: 8px; justify-content: center;">
+        <button class="btn btn-primary" id="download2" type="button">Télécharger PNG</button>
+        <button class="btn" id="againBtn2" type="button">Recommencer</button>
+      </div>
+    </div>
+  </div>
+
+
+  <script>
+    // Background hex grid — NE PAS MODIFIER (doit rester visuellement identique)
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+
+        const size = 24;
+        const hexW = 2 * size;
+        const hexH = Math.sqrt(3) * size;
+        const stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)';
+        ctx.lineWidth = 1;
+
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX;
+            const y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i;
+              const px = x + size * Math.cos(a);
+              const py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+  </script>
+  
+  <!-- OpenCV.js (WASM) -->
+  <script src="https://docs.opencv.org/4.x/opencv.js"></script>
+  
+  <script>
+  /* ====== Utils ====== */
+  const $=(s,r=document)=>r.querySelector(s);
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+
+  /* ====== DOM ====== */
+  const drop = $('#drop');
+  const fileInput = $('#file');
+  const browseBtn = $('#browseBtn');
+
+  const preview = $('#preview');
+  const imgBefore = $('#imgBefore');
+  const afterCanvas = $('#afterCanvas');
+  const afterLayer = $('#afterLayer');
+  const handle = $('#handle');
+
+  const modeText = $('#modeText');
+  const modeDot = $('#modeDot');
+  const fileInfo = $('#fileInfo');
+
+  const runBtn = $('#run');
+  const dlBtn = $('#download');
+  const dlBtn2 = $('#download2');
+  const againBtn = $('#againBtn');
+  const againBtn2 = $('#againBtn2');
+  const qualitySel = $('#quality'); // Maintenant le conteneur des boutons
+
+  const overlay = $('#overlay');
+  const overlayText = $('#overlayText');
+
+  const done = $('#done');
+  const resultThumb = $('#resultThumb');
+
+  /* ====== State ====== */
+  const MEDIUM_MAX = 1600;
+  let openingDialog = false;    // anti double-ouverture
+  let imageFile = null, imgReady=false, cvReady=false, resultURL=null;
+  let roi=null, roiCanvas=null, roiCtx=null, dragging=false, startPt=null;
+  
+  /* ====== NOUVEAU: Gestion du sélecteur de qualité ====== */
+  const qualityButtons = qualitySel.querySelectorAll('.btn-quality');
+  qualityButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      if (button.classList.contains('active')) return;
+      qualityButtons.forEach(btn => btn.classList.remove('active'));
+      button.classList.add('active');
+    });
+  });
+
+  /* ====== Accessibility helpers ====== */
+  function setStatusOk(txt){
+    modeText.textContent = txt;
+    modeDot.style.background = 'var(--color-green)';
+  }
+  function setStatusErr(txt){
+    modeText.textContent = '⚠️ ' + txt;
+    modeDot.style.background = 'var(--color-red)';
+  }
+  function updateRun(){ runBtn.disabled = !(imgReady && cvReady); }
+
+  /* ====== OpenCV readiness ====== */
+  (function waitForCV(){
+    function ready(){ cvReady=true; setStatusOk('Moteur prêt'); updateRun(); }
+    const check = () => {
+      if (window.cv) {
+        if (cv.ready && typeof cv.ready.then === 'function') { cv.ready.then(ready); }
+        else if ('onRuntimeInitialized' in cv) { cv.onRuntimeInitialized = ready; }
+        else {
+          const t=setInterval(()=>{ try{ new cv.Mat(); clearInterval(t); ready(); }catch{} },60);
+        }
+        return true;
+      }
+      return false;
+    };
+    if (!check()){
+      const t=setInterval(()=>{ if(check()) clearInterval(t); },80);
+    }
+  })();
+
+  /* ====== Drop / Browse (anti double-click) ====== */
+  drop.addEventListener('click', async ()=>{
+    if(openingDialog) return;
+    openingDialog = true;
+    fileInput.click();
+    setTimeout(()=>{ openingDialog=false; }, 1200);
+  });
+  browseBtn.addEventListener('click', ()=> drop.click());
+  drop.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); drop.click(); }});
+
+  ['dragover','dragleave','drop'].forEach(ev=>{
+    drop.addEventListener(ev, e=>{
+      e.preventDefault();
+      if(ev==='dragover'){ drop.classList.add('drag'); }
+      if(ev==='dragleave'){ drop.classList.remove('drag'); }
+      if(ev==='drop'){
+        drop.classList.remove('drag');
+        const f = e.dataTransfer?.files?.[0];
+        if(f) onFile(f);
+      }
+    });
+  });
+  fileInput.addEventListener('change', e=>{
+    openingDialog=false;
+    const f = e.target.files?.[0];
+    if(f) onFile(f);
+  });
+
+  /* ====== File handling ====== */
+  async function onFile(f){
+    imageFile = f; imgReady = false; updateRun();
+    const url = URL.createObjectURL(f);
+    imgBefore.src = url;
+    imgBefore.onload = ()=>{
+      afterCanvas.width = imgBefore.naturalWidth || imgBefore.width;
+      afterCanvas.height = imgBefore.naturalHeight || imgBefore.height;
+      imgReady = true; ensureRoiCanvas(); updateRun();
+    };
+    fileInfo.textContent = (f.size/1e6).toFixed(2)+' MB';
+    drop.classList.add('hidden'); preview.classList.remove('hidden');
+    dlBtn.disabled = true;
+    afterLayer.style.clipPath='inset(0 0 0 100%)'; handle.style.left='100%'; handle.style.opacity=0; handle.classList.remove('show');
+  }
+
+  function resetAll(){
+    imageFile=null; imgReady=false; updateRun();
+    if(resultURL){ URL.revokeObjectURL(resultURL); resultURL=null; }
+    imgBefore.removeAttribute('src');
+    const ctx = afterCanvas.getContext('2d'); ctx.clearRect(0,0,afterCanvas.width,afterCanvas.height);
+    preview.classList.add('hidden'); drop.classList.remove('hidden');
+    dlBtn.disabled = true; dlBtn2.disabled = true;
+    afterLayer.style.clipPath='inset(0 0 0 100%)'; handle.style.left='100%'; handle.style.opacity=0; handle.classList.remove('show');
+    fileInfo.textContent='Aucune image';
+    if(roiCanvas){ roiCanvas.remove(); roiCanvas=null; roiCtx=null; }
+    roi=null; dragging=false; startPt=null;
+    fileInput.value='';
+  }
+  againBtn.addEventListener('click', resetAll);
+  againBtn2.addEventListener('click', ()=>{ resetAll(); done.classList.remove('show'); });
+
+  /* ====== ROI overlay ====== */
+  function ensureRoiCanvas(){
+    if (roiCanvas) return;
+    roiCanvas = document.createElement('canvas');
+    roiCanvas.id = 'roiCanvas';
+    preview.appendChild(roiCanvas);
+    roiCtx = roiCanvas.getContext('2d');
+    resizeRoiCanvas();
+    window.addEventListener('resize', resizeRoiCanvas, { passive: true });
+    roiCanvas.addEventListener('mousedown', onDown);
+    roiCanvas.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
+  function resizeRoiCanvas(){
+    if(!roiCanvas) return;
+    const r = preview.getBoundingClientRect();
+    roiCanvas.width = Math.round(r.width);
+    roiCanvas.height= Math.round(r.height);
+    drawRoi();
+  }
+  function drawRoi(){
+    if(!roiCtx) return;
+    roiCtx.clearRect(0,0,roiCanvas.width,roiCanvas.height);
+    if(!roi) return;
+    roiCtx.lineWidth = 2;
+    roiCtx.setLineDash([6,4]);
+    roiCtx.strokeStyle = 'var(--color-violet)';
+    const rect = imgRectToCanvas(roi);
+    roiCtx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+  }
+  function onDown(e){
+    if(!imgReady) return;
+    const p = toImageCoords(e.offsetX, e.offsetY);
+    if(!p) return;
+    dragging=true; startPt=p; roi={x:p.x,y:p.y,w:0,h:0}; drawRoi();
+  }
+  function onMove(e){
+    if(!dragging || !startPt) return;
+    const p = toImageCoords(e.offsetX, e.offsetY); if(!p) return;
+    roi = { x: Math.min(startPt.x,p.x), y: Math.min(startPt.y,p.y),
+            w: Math.abs(p.x-startPt.x), h: Math.abs(p.y-startPt.y) };
+    drawRoi();
+  }
+  function onUp(){ dragging=false; startPt=null; drawRoi(); }
+
+  function toImageCoords(px,py){
+    const cw = roiCanvas.width, ch = roiCanvas.height;
+    const iw = imgBefore.naturalWidth, ih = imgBefore.naturalHeight;
+    if(!iw||!ih) return null;
+    const s = Math.min(cw/iw, ch/ih);
+    const wd = Math.round(iw*s), hd = Math.round(ih*s);
+    const ox = Math.floor((cw-wd)/2), oy = Math.floor((ch-hd)/2);
+    if(px<ox||py<oy||px>ox+wd||py>oy+hd) return null;
+    return { x: Math.max(0, Math.min(iw-1, Math.round((px-ox)/s))),
+             y: Math.max(0, Math.min(ih-1, Math.round((py-oy)/s))) };
+  }
+  function imgRectToCanvas(r){
+    const cw = roiCanvas.width, ch = roiCanvas.height;
+    const iw = imgBefore.naturalWidth, ih = imgBefore.naturalHeight;
+    const s = Math.min(cw/iw, ch/ih);
+    const wd = Math.round(iw*s), hd = Math.round(ih*s);
+    const ox = Math.floor((cw-wd)/2), oy = Math.floor((ch-hd)/2);
+    return { x: Math.round(ox + r.x*s), y: Math.round(oy + r.y*s),
+             w: Math.round(r.w*s), h: Math.round(r.h*s) };
+  }
+
+  /* ====== Core processing ====== */
+  runBtn.addEventListener('click', async ()=>{
+    if(runBtn.disabled){ setStatusErr('Choisis une image'); return; }
+    overlay.classList.add('show');
+    overlayText.textContent = 'Préparation du modèle…';
+    const tMin = wait(3000);
+    try{
+      await Promise.all([runMatting(), tMin]);
+      if(resultURL){
+        resultThumb.src = resultURL;
+        resultThumb.classList.remove('hidden');
+        dlBtn2.disabled = false;
+      }
+      done.classList.add('show');
+    }catch(e){
+      setStatusErr(e?.message || String(e));
+    }finally{
+      overlay.classList.remove('show');
+    }
+  });
+
+  dlBtn.addEventListener('click', downloadImage);
+  dlBtn2.addEventListener('click', downloadImage);
+
+  async function runMatting(){
+    try{
+      setStatusOk('Segmentation… (IMG.LY)');
+      overlayText.textContent = 'Segmentation (IA)…';
+      const { removeBackground } = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1/+esm');
+      const input = imageFile || (await (await fetch(imgBefore.src)).blob());
+      const outBlob = await removeBackground(input);
+      const bmp = await createImageBitmap(outBlob);
+      afterCanvas.width = bmp.width; afterCanvas.height = bmp.height;
+      afterCanvas.getContext('2d').drawImage(bmp, 0, 0);
+      if (resultURL) URL.revokeObjectURL(resultURL);
+      resultURL = URL.createObjectURL(outBlob);
+      dlBtn.disabled = false;
+      reveal();
+      setStatusOk('Arrière-plan supprimé — IMG.LY');
+      return;
+    }catch(e){
+      console.warn('IMG.LY KO → fallback local', e);
+    }
+    overlayText.textContent = 'Segmentation (locale)…';
+    await imgBefore.decode?.();
+    const W0 = imgBefore.naturalWidth, H0 = imgBefore.naturalHeight;
+    
+    // MODIFIÉ: lecture de la valeur depuis les boutons
+    const high = (qualitySel.querySelector('.btn-quality.active').dataset.value === 'high');
+
+    const targetMax = high ? Math.max(W0,H0) : MEDIUM_MAX;
+    const scale = Math.min(1, targetMax/Math.max(W0,H0));
+    const W = Math.round(W0*scale), H = Math.round(H0*scale);
+    const src = document.createElement('canvas'); src.width=W; src.height=H;
+    src.getContext('2d').drawImage(imgBefore,0,0,W,H);
+    let R = roi ? { x: Math.round(roi.x*scale), y: Math.round(roi.y*scale),
+                    w: Math.round(roi.w*scale), h: Math.round(roi.h*scale) }
+                : centralRect(W,H);
+    if(R.w<12||R.h<12) R = centralRect(W,H);
+    let alpha=null, ok=false;
+    try{
+      const srcMat = cv.imread(src);
+      const bgr = new cv.Mat(); cv.cvtColor(srcMat, bgr, cv.COLOR_RGBA2BGR);
+      const smooth=new cv.Mat(); cv.bilateralFilter(bgr, smooth, 9, 75, 75);
+      const mask=cv.Mat.zeros(H,W,cv.CV_8U), bgd=new cv.Mat(), fgd=new cv.Mat();
+      cv.grabCut(smooth, mask, new cv.Rect(R.x,R.y,R.w,R.h), bgd, fgd, 5, cv.GC_INIT_WITH_RECT);
+      alpha=new Uint8ClampedArray(W*H);
+      let sumA=0;
+      for(let i=0;i<mask.data.length;i++){ const v=mask.data[i]; const a=(v===cv.GC_FGD||v===cv.GC_PR_FGD)?255:0; alpha[i]=a; sumA+=a; }
+      if(sumA < W*H*0.005){
+        const grow=0.12;
+        const Rx = Math.max(0, Math.round(R.x - R.w*grow));
+        const Ry = Math.max(0, Math.round(R.y - R.h*grow));
+        const Rw = Math.min(W-Rx, Math.round(R.w*(1+2*grow)));
+        const Rh = Math.min(H-Ry, Math.round(R.h*(1+2*grow)));
+        mask.setTo(new cv.Scalar(0));
+        cv.grabCut(smooth, mask, new cv.Rect(Rx,Ry,Rw,Rh), bgd, fgd, 5, cv.GC_INIT_WITH_RECT);
+        sumA=0;
+        for(let i=0;i<mask.data.length;i++){ const v=mask.data[i]; const a=(v===cv.GC_FGD||v===cv.GC_PR_FGD)?255:0; alpha[i]=a; sumA+=a; }
+      }
+      srcMat.delete(); bgr.delete(); smooth.delete(); mask.delete(); bgd.delete(); fgd.delete();
+      if(sumA >= W*H*0.002) ok=true;
+    }catch(e){ console.warn('GrabCut KO:', e); }
+    if(!ok) alpha = quickMatteFromBorder(src);
+    const mMat = cv.matFromArray(H,W,cv.CV_8U, alpha);
+    const k3 = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(3,3));
+    const k5 = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(5,5));
+    cv.morphologyEx(mMat, mMat, cv.MORPH_OPEN, k3);
+    cv.morphologyEx(mMat, mMat, cv.MORPH_CLOSE, k5);
+    cv.GaussianBlur(mMat, mMat, new cv.Size(3,3), 0);
+    const rgba = src.getContext('2d').getImageData(0,0,W,H);
+    const guided = guidedFilterAlpha(rgba.data, mMat.data, W,H, 8, 1e-3);
+    if(high && scale<1){
+      const tmp=document.createElement('canvas'); tmp.width=W; tmp.height=H;
+      const tctx=tmp.getContext('2d'); const img=tctx.createImageData(W,H);
+      for(let i=0,j=0;i<img.data.length;i+=4,j++){ img.data[i]=rgba.data[i]; img.data[i+1]=rgba.data[i+1]; img.data[i+2]=rgba.data[i+2]; img.data[i+3]=guided[j]; }
+      tctx.putImageData(img,0,0);
+      afterCanvas.width=W0; afterCanvas.height=H0;
+      const ctx=afterCanvas.getContext('2d'); ctx.imageSmoothingEnabled=true;
+      ctx.drawImage(tmp,0,0,W,H,0,0,W0,H0);
+    }else{
+      afterCanvas.width=W; afterCanvas.height=H;
+      const ctx=afterCanvas.getContext('2d'); const img=ctx.createImageData(W,H);
+      for(let i=0,j=0;i<img.data.length;i+=4,j++){ img.data[i]=rgba.data[i]; img.data[i+1]=rgba.data[i+1]; img.data[i+2]=rgba.data[i+2]; img.data[i+3]=guided[j]; }
+      ctx.putImageData(img,0,0);
+    }
+    mMat.delete(); k3.delete(); k5.delete();
+    const blob = await new Promise(r=> afterCanvas.toBlob(r,'image/png'));
+    if(resultURL) URL.revokeObjectURL(resultURL);
+    resultURL = URL.createObjectURL(blob);
+    dlBtn.disabled = false;
+    reveal();
+    setStatusOk('Arrière-plan supprimé — ' + (ok?'GrabCut':'QuickMatte'));
+  }
+
+  function centralRect(iw,ih){
+    const m = 0.18;
+    return { x: Math.round(iw*m), y: Math.round(ih*m), w: Math.round(iw*(1-2*m)), h: Math.round(ih*(1-2*m)) };
+  }
+  function quickMatteFromBorder(srcCanvas){
+    const W=srcCanvas.width, H=srcCanvas.height, ctx=srcCanvas.getContext('2d');
+    const rgba=ctx.getImageData(0,0,W,H).data;
+    const bw=Math.max(2, Math.floor(Math.min(W,H)*0.04));
+    let r=0,g=0,b=0,n=0;
+    for(let x=0;x<W;x++) for(let k=0;k<bw;k++){ let i=(k*W+x)*4; r+=rgba[i]; g+=rgba[i+1]; b+=rgba[i+2]; n++; i=((H-1-k)*W+x)*4; r+=rgba[i]; g+=rgba[i+1]; b+=rgba[i+2]; n++; }
+    for(let y=0;y<H;y++) for(let k=0;k<bw;k++){ let i=(y*W+k)*4; r+=rgba[i]; g+=rgba[i+1]; b+=rgba[i+2]; n++; i=(y*W+(W-1-k))*4; r+=rgba[i]; g+=rgba[i+1]; b+=rgba[i+2]; n++; }
+    r/=n; g/=n; b/=n;
+    const dist=new Float32Array(W*H); let min=1e9,max=-1e9;
+    for(let i=0,j=0;i<rgba.length;i+=4,j++){ const d=(rgba[i]-r)**2+(rgba[i+1]-g)**2+(rgba[i+2]-b)**2; dist[j]=d; if(d<min)min=d; if(d>max)max=d; }
+    const bins=256, hist=new Uint32Array(bins);
+    for(let j=0;j<dist.length;j++){ const t=Math.floor((dist[j]-min)/(max-min+1e-6)*(bins-1)); hist[t]++; }
+    let sum=0,sumB=0,wB=0,wF=0,mB=0,mF=0,maxVar=-1,th=0;
+    for(let i=0;i<bins;i++) sum+=i*hist[i];
+    const tot=W*H;
+    for(let i=0;i<bins;i++){
+      wB+=hist[i]; if(!wB) continue;
+      wF=tot-wB; if(!wF) break;
+      sumB+=i*hist[i]; mB=sumB/wB; mF=(sum-sumB)/wF;
+      const between=wB*wF*(mB-mF)*(mB-mF);
+      if(between>maxVar){ maxVar=between; th=i; }
+    }
+    const thr=min + (th/(bins-1))*(max-min);
+    const alpha=new Uint8ClampedArray(W*H);
+    for(let j=0;j<dist.length;j++) alpha[j] = dist[j]>thr ? 255 : 0;
+    return alpha;
+  }
+  function guidedFilterAlpha(srcRGBA, alpha, w, h, radius=6, eps=1e-3){
+    const N=(2*radius+1)*(2*radius+1);
+    const I=new Float32Array(w*h);
+    for(let i=0,j=0;i<srcRGBA.length;i+=4,j++) I[j]=(srcRGBA[i]*0.299+srcRGBA[i+1]*0.587+srcRGBA[i+2]*0.114)/255;
+    const box=(inp)=>{
+      const out=new Float32Array(w*h), tmp=new Float32Array(w*h);
+      for(let y=0;y<h;y++){ let s=0; for(let x=0;x<w;x++){const i=y*w+x; s+=inp[i]; if(x>=2*radius) s-=inp[y*w+(x-2*radius-1)]; tmp[i]=s; } }
+      for(let x=0;x<w;x++){ let s=0; for(let y=0;y<h;y++){const i=y*w+x; s+=tmp[i]; if(y>=2*radius) s-=tmp[(y-2*radius-1)*w+x]; out[i]=s/N; } }
+      return out;
+    };
+    const A=new Float32Array(w*h); for(let i=0;i<w*h;i++) A[i]=alpha[i]/255;
+    const I2=new Float32Array(w*h); for(let i=0;i<w*h;i++) I2[i]=I[i]*I[i];
+    const IA=new Float32Array(w*h); for(let i=0;i<w*h;i++) IA[i]=I[i]*A[i];
+    const meanI=box(I), meanI2=box(I2), meanA=box(A), meanIA=box(IA);
+    const varI=new Float32Array(w*h), covIA=new Float32Array(w*h);
+    for(let i=0;i<w*h;i++){ varI[i]=meanI2[i]-meanI[i]*meanI[i]; covIA[i]=meanIA[i]-meanI[i]*meanA[i]; }
+    const a=new Float32Array(w*h), b=new Float32Array(w*h);
+    for(let i=0;i<w*h;i++){ a[i]=covIA[i]/(varI[i]+eps); b[i]=meanA[i]-a[i]*meanI[i]; }
+    const meanAcoef=box(a), meanBcoef=box(b);
+    const out=new Uint8ClampedArray(w*h);
+    for(let i=0;i<w*h;i++){ const v=meanAcoef[i]*I[i]+meanBcoef[i]; out[i]=Math.max(0,Math.min(255,Math.round(v*255))); }
+    return out;
+  }
+
+  function reveal(){
+    const dur=1100; handle.classList.add('show'); handle.style.opacity=1;
+    let start;
+    function step(ts){ 
+      if(!start) start=ts; 
+      const p=Math.min(1,(ts-start)/dur);
+      const pct=100-(100*p); 
+      afterLayer.style.clipPath=`inset(0 0 0 ${pct}%)`; 
+      handle.style.left=`${pct}%`;
+      if(p<1) requestAnimationFrame(step);
+    } 
+    requestAnimationFrame(step);
+  }
+
+  function downloadImage(){
+    if(!resultURL) return;
+    const a=document.createElement('a');
+    a.href=resultURL;
+    a.download=(imageFile?.name?.replace(/\.[^.]+$/,'')||'image')+'_no-bg.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

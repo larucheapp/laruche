@@ -1,0 +1,451 @@
+
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Convertisseur de Fuseaux Horaires - La Ruche</title>
+  <meta name="description" content="Convertissez facilement l'heure entre différents fuseaux horaires du monde entier.">
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px; /* par défaut, peut être changé via body[data-size] */
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:center; justify-content:center;
+      padding:48px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+    
+    /* ===== STYLES CONVERTISSEUR FUSEAUX HORAIRES ===== */
+    .converter-container {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      width: 100%;
+    }
+
+    .timezone-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      background-color: var(--color-bg-alt);
+      padding: 20px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+    }
+
+    .inputs-group {
+      display: flex;
+      gap: 12px;
+    }
+    .inputs-group .form-input {
+        background-color: var(--color-bg);
+    }
+
+    .time-display { text-align: left; }
+    .display-time {
+      font-size: 3.5rem;
+      font-weight: 600;
+      line-height: 1.1;
+      color: var(--color-text-primary);
+    }
+    .display-details {
+      font-size: 0.9rem;
+      color: var(--color-text-secondary);
+      margin-top: 4px;
+    }
+    
+    .time-difference {
+      padding-top: 80px;
+      text-align: center;
+      color: var(--color-text-secondary);
+    }
+    .time-difference-arrow {
+      font-size: 2rem;
+      line-height: 1;
+      color: var(--color-violet);
+    }
+    #time-diff-text {
+      font-weight: 500;
+      margin-top: 8px;
+    }
+
+
+    /* == Custom Select Dropdown == */
+    .custom-select-wrapper { position: relative; }
+    .custom-select-trigger {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border: 1px solid var(--color-border);
+      background: var(--color-bg);
+      cursor: pointer;
+      padding: 10px 14px;
+      border-radius: var(--radius-md);
+      transition: border-color .2s, box-shadow .2s;
+      width: 100%;
+      text-align: left;
+    }
+    .custom-select-trigger:focus, .custom-select-trigger:hover {
+      outline:none; border-color:var(--color-violet); box-shadow:0 0 0 3px rgba(124,58,237,.2)
+    }
+
+    .custom-select-trigger .flag-icon {
+      width: 28px;
+      height: 28px;
+      object-fit: cover;
+      border-radius: 50%;
+      flex-shrink: 0;
+      border: 1px solid var(--color-border);
+    }
+    .trigger-text {
+        flex-grow: 1;
+    }
+    .trigger-text .city-name {
+      font-weight: 500;
+      font-size: 1rem;
+      color: var(--color-text-primary);
+    }
+     .trigger-text .country-name {
+      font-size: 0.8rem;
+      color: var(--color-text-secondary);
+    }
+
+    .custom-select-options {
+      position: absolute;
+      top: 105%;
+      left: 0;
+      width: 100%;
+      max-height: 250px;
+      overflow-y: auto;
+      background: var(--color-bg);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
+      z-index: 100;
+      padding: 8px;
+      visibility: hidden;
+      opacity: 0;
+      transform: translateY(-10px);
+      transition: all 0.2s ease;
+    }
+    .custom-select-options.open {
+        visibility: visible;
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .option {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      cursor: pointer;
+      border-radius: 8px;
+    }
+    .option:hover, .option.focused {
+      background-color: var(--color-bg-alt);
+    }
+    .option .flag-icon {
+      width: 24px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .option-text { flex-grow: 1; }
+    .option-text .city-name { font-weight: 500; color: var(--color-text-primary); }
+    .option-text .country-name { font-size: 0.8rem; color: var(--color-text-secondary); }
+    .option-utc { font-size: 0.8rem; color: var(--color-text-secondary); }
+
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="wide">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Convertisseur de Fuseaux Horaires</h1>
+      
+      <div class="generator-card" role="region" aria-label="Convertisseur de Fuseaux Horaires">
+        <div class="converter-container">
+          <!-- Panneau de gauche -->
+          <div id="panel-left" class="timezone-panel"></div>
+          
+          <!-- Différence -->
+          <div class="time-difference">
+            <div class="time-difference-arrow">→</div>
+            <div id="time-diff-text"></div>
+          </div>
+
+          <!-- Panneau de droite -->
+          <div id="panel-right" class="timezone-panel"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Background hex grid — NE PAS MODIFIER
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+        const size=24,hexW=2*size,hexH=Math.sqrt(3)*size,stepX=hexW*3/4;
+        ctx.strokeStyle='rgba(124,58,237,0.10)'; ctx.lineWidth=1;
+        for(let r=0;r*hexH<rect.height+hexH;r++) for(let col=0;col*stepX<rect.width+hexW;col++){
+          const x=col*stepX, y=r*hexH+(col%2?hexH/2:0);
+          ctx.beginPath();
+          for(let i=0;i<6;i++){ const a=2*Math.PI/6*i,px=x+size*Math.cos(a),py=y+size*Math.sin(a); if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py); }
+          ctx.closePath(); ctx.stroke();
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true}); draw();
+    })();
+  </script>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const TIMEZONES = [
+        { iana: "Europe/Paris", city: "Paris", country: "France", code: "fr" },
+        { iana: "Europe/London", city: "Londres", country: "Royaume-Uni", code: "gb" },
+        { iana: "America/New_York", city: "New York", country: "États-Unis", code: "us" },
+        { iana: "America/Los_Angeles", city: "Los Angeles", country: "États-Unis", code: "us" },
+        { iana: "Asia/Tokyo", city: "Tokyo", country: "Japon", code: "jp" },
+        { iana: "Asia/Dubai", city: "Dubaï", country: "É.A.U.", code: "ae" },
+        { iana: "Asia/Shanghai", city: "Shanghai", country: "Chine", code: "cn" },
+        { iana: "Asia/Kolkata", city: "New Delhi", country: "Inde", code: "in" },
+        { iana: "Australia/Sydney", city: "Sydney", country: "Australie", code: "au" },
+        { iana: "America/Sao_Paulo", city: "São Paulo", country: "Brésil", code: "br" },
+        { iana: "America/Toronto", city: "Toronto", country: "Canada", code: "ca" },
+        { iana: "Europe/Moscow", city: "Moscou", country: "Russie", code: "ru" },
+        { iana: "Europe/Berlin", city: "Berlin", country: "Allemagne", code: "de" },
+        { iana: "Europe/Rome", city: "Rome", country: "Italie", code: "it" },
+        { iana: "Africa/Cairo", city: "Le Caire", country: "Égypte", code: "eg" },
+        { iana: "Africa/Johannesburg", city: "Johannesburg", country: "Afrique du Sud", code: "za" },
+        { iana: "Asia/Seoul", city: "Séoul", country: "Corée du Sud", code: "kr" },
+        { iana: "Asia/Bangkok", city: "Bangkok", country: "Thaïlande", code: "th" },
+        { iana: "Pacific/Auckland", city: "Auckland", country: "Nouvelle-Zélande", code: "nz" },
+        { iana: "Etc/UTC", city: "UTC", country: "Temps Universel", code: "_earth" },
+      ].sort((a, b) => a.city.localeCompare(b.city));
+
+      const panelLeft = document.getElementById('panel-left');
+      const panelRight = document.getElementById('panel-right');
+      const timeDiffText = document.getElementById('time-diff-text');
+
+      let state = {
+        left: { iana: "Europe/Paris" },
+        right: { iana: "America/New_York" },
+        baseDate: new Date(),
+        lastChanged: 'left'
+      };
+
+      const getTzInfo = (iana) => TIMEZONES.find(tz => tz.iana === iana);
+      
+      function renderPanel(panelId) {
+        const panelEl = panelId === 'left' ? panelLeft : panelRight;
+        const panelState = state[panelId];
+        const tzInfo = getTzInfo(panelState.iana);
+        const optionsHtml = TIMEZONES.map(tz => {
+            const dateForOffset = new Date();
+            const offsetString = new Intl.DateTimeFormat('fr-FR', { timeZone: tz.iana, timeZoneName: 'shortOffset' }).format(dateForOffset).split(' ')[1];
+            return `
+            <div class="option" data-iana="${tz.iana}" role="option" tabindex="-1">
+                <img src="https://flagcdn.com/w40/${tz.code}.png" alt="" class="flag-icon" loading="lazy">
+                <div class="option-text">
+                    <div class="city-name">${tz.city}</div>
+                    <div class="country-name">${tz.country}</div>
+                </div>
+                <div class="option-utc">${offsetString}</div>
+            </div>`;
+        }).join('');
+
+        const localDate = new Date(state.baseDate.toLocaleString('en-US', { timeZone: panelState.iana }));
+
+        panelEl.innerHTML = `
+          <div class="custom-select-wrapper">
+            <button class="custom-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+              <img src="https://flagcdn.com/w40/${tzInfo.code}.png" alt="" class="flag-icon">
+              <div class="trigger-text">
+                <div class="city-name">${tzInfo.city}</div>
+                <div class="country-name">${tzInfo.country}</div>
+              </div>
+            </button>
+            <div class="custom-select-options" role="listbox">${optionsHtml}</div>
+          </div>
+          <div class="inputs-group">
+            <input type="date" class="form-input date-input" value="${localDate.toISOString().split('T')[0]}">
+            <input type="time" class="form-input time-input" value="${localDate.toTimeString().substring(0, 5)}">
+          </div>
+          <div class="time-display">
+            <div class="display-time">--:--:--</div>
+            <div class="display-details">---</div>
+          </div>
+        `;
+      }
+      
+      function attachEventListeners() {
+        ['left', 'right'].forEach(panelId => {
+          const panelEl = panelId === 'left' ? panelLeft : panelRight;
+
+          // Dropdown
+          const trigger = panelEl.querySelector('.custom-select-trigger');
+          const options = panelEl.querySelector('.custom-select-options');
+          trigger.addEventListener('click', () => options.classList.toggle('open'));
+
+          options.querySelectorAll('.option').forEach(option => {
+            option.addEventListener('click', () => {
+              state[panelId].iana = option.dataset.iana;
+              options.classList.remove('open');
+              render();
+              updateConversion();
+            });
+          });
+
+          // Inputs
+          const handleInputChange = () => {
+            state.lastChanged = panelId;
+            const dateInput = panelEl.querySelector('.date-input').value;
+            const timeInput = panelEl.querySelector('.time-input').value;
+            if(dateInput && timeInput) {
+              const localDateTimeString = `${dateInput}T${timeInput}:00`;
+              // This is a bit tricky; we create a date assuming it's UTC then "shift" it
+              const tempDate = new Date(localDateTimeString);
+              const offset = tempDate.getTimezoneOffset() * 60000;
+              const utcDate = new Date(tempDate.getTime() - offset);
+              
+              const formatter = new Intl.DateTimeFormat('en-US', { timeZone: state[panelId].iana, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+              const parts = formatter.formatToParts(utcDate);
+              const find = (type) => parts.find(p => p.type === type).value;
+              const ianaTime = new Date(`${find('year')}-${find('month')}-${find('day')}T${find('hour')}:${find('minute')}:${find('second')}`);
+              
+              state.baseDate = ianaTime;
+            }
+            updateConversion();
+          };
+          
+          panelEl.querySelector('.date-input').addEventListener('input', handleInputChange);
+          panelEl.querySelector('.time-input').addEventListener('input', handleInputChange);
+        });
+      }
+
+      function updateConversion() {
+        ['left', 'right'].forEach(panelId => {
+            const panelEl = panelId === 'left' ? panelLeft : panelRight;
+            const panelState = state[panelId];
+            const timeEl = panelEl.querySelector('.display-time');
+            const detailsEl = panelEl.querySelector('.display-details');
+            
+            if (timeEl && detailsEl) {
+                const timeFormatter = new Intl.DateTimeFormat('fr-FR', { timeZone: panelState.iana, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                const detailsFormatter = new Intl.DateTimeFormat('fr-FR', { timeZone: panelState.iana, weekday: 'long', day: 'numeric', month: 'long', timeZoneName: 'shortOffset' });
+                
+                timeEl.textContent = timeFormatter.format(state.baseDate);
+                detailsEl.textContent = detailsFormatter.format(state.baseDate);
+            }
+        });
+
+        // Update difference
+        const getOffsetMinutes = (iana) => {
+            const now = new Date();
+            const utcDate = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+            const tzDate = new Date(now.toLocaleString('en-US', { timeZone: iana }));
+            return (tzDate.getTime() - utcDate.getTime()) / (60 * 1000);
+        };
+        
+        const offsetLeft = getOffsetMinutes(state.left.iana);
+        const offsetRight = getOffsetMinutes(state.right.iana);
+        const diffHours = (offsetRight - offsetLeft) / 60;
+
+        if (diffHours === 0) {
+            timeDiffText.textContent = "Même heure";
+        } else {
+            const sign = diffHours > 0 ? '+' : '';
+            const hours = Math.trunc(diffHours);
+            const minutes = Math.abs(diffHours % 1) * 60;
+            let diffString = `${sign}${hours}h`;
+            if (minutes > 0) diffString += `${minutes}min`;
+            timeDiffText.textContent = diffString;
+        }
+      }
+
+      function render() {
+        renderPanel('left');
+        renderPanel('right');
+        attachEventListeners();
+      }
+      
+      function tick() {
+        state.baseDate.setSeconds(state.baseDate.getSeconds() + 1);
+        updateConversion();
+      }
+
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.custom-select-wrapper')) {
+          document.querySelectorAll('.custom-select-options').forEach(el => el.classList.remove('open'));
+        }
+      });
+
+      // Init
+      render();
+      updateConversion();
+      setInterval(tick, 1000);
+    });
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

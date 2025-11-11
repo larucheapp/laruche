@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Générateur de Politique de Confidentialité — La Ruche</title>
+  <meta name="description" content="Créez et téléchargez des pages de politique de confidentialité (RGPD) et de gestion des cookies personnalisées pour votre site web, en format HTML ou PDF.">
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    :root {
+      --color-bg: #FFFFFF;
+      --color-bg-alt: #F7F8FA;
+      --color-border: #E9EAF0;
+      --color-text-primary: #141417;
+      --color-text-secondary: #6B7280;
+      --color-violet: #7C3AED;
+      --color-violet-dark: #6D28D9;
+      --radius-md: 12px;
+      --radius-lg: 14px;
+      --tool-max-w: 480px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; background-color: var(--color-bg); }
+    body {
+      height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--color-text-primary); line-height: 1.5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    body[data-size="default"] { --tool-max-w: 480px; }
+    body[data-size="wide"] { --tool-max-w: 960px; }
+    body[data-size="xl"] { --tool-max-w: 1200px; }
+
+    #bg-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; }
+
+    .app-header {
+      flex-shrink: 0; background: var(--color-bg-alt); border-bottom: 1px solid var(--color-border);
+      padding: 0 24px; display: flex; align-items: center; height: 70px;
+    }
+    .app-header a { display: inline-flex; align-items: center; }
+    .logo-img { height: 70px; width: auto; vertical-align: middle; }
+
+    .main-content {
+      flex-grow: 1; display: flex; align-items: flex-start; justify-content: center;
+      padding: 48px 24px; overflow-y: auto;
+    }
+    .tool-wrapper { display: flex; flex-direction: column; align-items: center; position: relative; width: 100%; max-width: var(--tool-max-w); }
+    .tool-title {
+      font-size: 1.75rem; font-weight: 600; padding: 12px 28px;
+      background: linear-gradient(45deg, var(--color-violet), var(--color-violet-dark));
+      color: #fff; border-radius: var(--radius-md); margin-bottom: -20px; position: relative; z-index: 5;
+      box-shadow: 0 4px 14px -4px rgba(124, 58, 237, .4);
+    }
+    .generator-card {
+      background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+      padding: 28px; padding-top: 40px; width: 100%;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display: flex; flex-direction: column; gap: 24px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-label { font-weight: 500; color: var(--color-text-primary); }
+    .form-input, .form-textarea {
+      width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+      font-size: 1rem; color: var(--color-text-primary); background: var(--color-bg);
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .form-textarea { resize: vertical; min-height: 100px; }
+    .form-input:focus, .form-textarea:focus { outline: none; border-color: var(--color-violet); box-shadow: 0 0 0 3px rgba(124, 58, 237, .2); }
+    .form-input.is-invalid { border-color: #EF4444; }
+    
+    .checkbox-group { display: flex; flex-direction: column; gap: 12px; }
+    .checkbox-label {
+      display: flex; align-items: center; gap: 10px; cursor: pointer;
+      font-weight: 400; font-size: 1rem;
+    }
+    .checkbox-input {
+      height: 18px; width: 18px; flex-shrink: 0;
+      border: 1px solid var(--color-border); border-radius: 6px;
+      appearance: none; cursor: pointer;
+      transition: background-color .2s, border-color .2s;
+    }
+    .checkbox-input:checked {
+      background-color: var(--color-violet);
+      border-color: var(--color-violet);
+      background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+      background-size: 100% 100%;
+    }
+    .checkbox-input:focus { box-shadow: 0 0 0 3px rgba(124, 58, 237, .2); outline: none; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      font-weight: 500; padding: 10px 16px; border-radius: var(--radius-md); border: none; cursor: pointer;
+      transition: background-color .2s, box-shadow .2s; font-size: 14px;
+    }
+    .btn:focus-visible { outline: 2px solid transparent; outline-offset: 2px; box-shadow: 0 0 0 3px rgba(124, 58, 237, .4); }
+    .btn-primary { background: var(--color-violet); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--color-violet-dark); }
+    .btn-primary:disabled { background: #A78BFA; cursor: not-allowed; }
+    .btn-secondary { background: var(--color-bg-alt); color: var(--color-text-primary); border: 1px solid var(--color-border); }
+    .btn-secondary:hover:not(:disabled) { background: #F0F1F3; }
+    
+    /* Wizard Styles */
+    #policy-form fieldset { border: none; padding: 0; margin: 0; display: none; flex-direction: column; gap: 24px; animation: fadeIn .5s; }
+    #policy-form fieldset.active { display: flex; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    
+    .progress-bar { display: flex; gap: 8px; margin-bottom: 24px; }
+    .progress-step {
+      flex: 1; height: 6px; background-color: var(--color-border); border-radius: 3px;
+      transition: background-color .4s;
+    }
+    .progress-step.active { background-color: var(--color-violet); }
+    
+    .form-navigation { display: flex; justify-content: space-between; margin-top: 16px; }
+    #download-section { text-align: center; }
+    #download-section h3 { margin-bottom: 16px; font-size: 1.25rem; }
+    .download-buttons { display: flex; gap: 16px; justify-content: center; }
+    .download-buttons .btn { width: 100%; max-width: 250px; }
+
+    #loading-overlay {
+      position: absolute; inset: 0;
+      background: rgba(255,255,255,0.8);
+      display: none; align-items: center; justify-content: center;
+      border-radius: var(--radius-lg);
+      z-index: 10;
+    }
+    .spinner {
+      width: 48px; height: 48px;
+      border: 4px solid var(--color-border);
+      border-top-color: var(--color-violet);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="wide">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Générateur de Politique de Confidentialité</h1>
+      <div class="generator-card" role="region" aria-label="Générateur de Politique de Confidentialité">
+        <div id="loading-overlay"><div class="spinner"></div></div>
+
+        <div id="wizard-container">
+          <div class="progress-bar">
+            <div class="progress-step active" data-step="1"></div>
+            <div class="progress-step" data-step="2"></div>
+            <div class="progress-step" data-step="3"></div>
+            <div class="progress-step" data-step="4"></div>
+          </div>
+
+          <form id="policy-form">
+            <fieldset class="active" data-step="1">
+              <div class="form-group">
+                <label for="site-name" class="form-label">Nom du site web</label>
+                <input type="text" id="site-name" class="form-input" placeholder="Ex: Ma Boutique Inc." required>
+              </div>
+              <div class="form-group">
+                <label for="site-url" class="form-label">URL du site web</label>
+                <input type="url" id="site-url" class="form-input" placeholder="https://www.maboutique.com" required>
+              </div>
+              <div class="form-group">
+                <label for="company-name" class="form-label">Nom de l'entreprise</label>
+                <input type="text" id="company-name" class="form-input" placeholder="Ex: Ma Boutique SAS" required>
+              </div>
+               <div class="form-group">
+                <label for="company-address" class="form-label">Adresse de l'entreprise</label>
+                <input type="text" id="company-address" class="form-input" placeholder="123 Rue de la République, 75001 Paris, France" required>
+              </div>
+              <div class="form-group">
+                <label for="contact-email" class="form-label">Email de contact (pour la confidentialité)</label>
+                <input type="email" id="contact-email" class="form-input" placeholder="privacy@maboutique.com" required>
+              </div>
+            </fieldset>
+
+            <fieldset data-step="2">
+              <div class="form-group">
+                <label class="form-label">Quelles données personnelles collectez-vous ?</label>
+                <div class="checkbox-group">
+                  <label class="checkbox-label"><input type="checkbox" class="checkbox-input" name="data-collected" value="Nom et prénom"> Nom et prénom</label>
+                  <label class="checkbox-label"><input type="checkbox" class="checkbox-input" name="data-collected" value="Adresse email"> Adresse email</label>
+                  <label class="checkbox-label"><input type="checkbox" class="checkbox-input" name="data-collected" value="Adresse postale"> Adresse postale</label>
+                  <label class="checkbox-label"><input type="checkbox" class="checkbox-input" name="data-collected" value="Numéro de téléphone"> Numéro de téléphone</label>
+                  <label class="checkbox-label"><input type="checkbox" class="checkbox-input" name="data-collected" value="Adresse IP"> Adresse IP</label>
+                  <label class="checkbox-label"><input type="checkbox" class="checkbox-input" name="data-collected" value="Données de connexion et de navigation"> Données de connexion et de navigation</label>
+                  <label class="checkbox-label"><input type="checkbox" class="checkbox-input" name="data-collected" value="Données de transaction"> Données de transaction (historique d'achats)</label>
+                </div>
+              </div>
+               <div class="form-group">
+                <label for="collection-purpose" class="form-label">Pourquoi collectez-vous ces données ?</label>
+                <input type="text" id="collection-purpose" class="form-input" placeholder="Ex: Gestion des commandes, newsletters, amélioration du service..." required>
+              </div>
+            </fieldset>
+            
+            <fieldset data-step="3">
+              <div class="form-group">
+                <label class="form-label">Quels types de cookies utilisez-vous ?</label>
+                <div class="checkbox-group">
+                  <label class="checkbox-label"><input type="checkbox" class="checkbox-input" name="cookie-types" value="Cookies essentiels" checked> Cookies essentiels (pour le fonctionnement du site)</label>
+                  <label class="checkbox-label"><input type="checkbox" class="checkbox-input" name="cookie-types" value="Cookies de performance et d'analyse"> Cookies de performance et d'analyse</label>
+                  <label class="checkbox-label"><input type="checkbox" class="checkbox-input" name="cookie-types" value="Cookies publicitaires"> Cookies publicitaires</label>
+                  <label class="checkbox-label"><input type="checkbox" class="checkbox-input" name="cookie-types" value="Cookies de réseaux sociaux"> Cookies de réseaux sociaux</label>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="third-party-services" class="form-label">Services tiers qui déposent des cookies (un par ligne)</label>
+                <textarea id="third-party-services" class="form-textarea" placeholder="Google Analytics&#10;Meta (Facebook) Pixel&#10;Stripe&#10;..."></textarea>
+              </div>
+            </fieldset>
+
+            <fieldset data-step="4">
+              <div id="download-section">
+                <h3>Vos documents sont prêts !</h3>
+                <p style="color: var(--color-text-secondary); margin-bottom: 24px;">Téléchargez vos politiques personnalisées au format de votre choix.</p>
+                <div class="download-buttons">
+                  <button type="button" id="download-html" class="btn btn-primary">Télécharger (.html)</button>
+                  <button type="button" id="download-pdf" class="btn btn-secondary">Télécharger (.pdf)</button>
+                </div>
+              </div>
+            </fieldset>
+          </form>
+
+          <div class="form-navigation">
+            <button type="button" id="prev-btn" class="btn btn-secondary" style="visibility: hidden;">Précédent</button>
+            <button type="button" id="next-btn" class="btn btn-primary">Suivant</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    // --- TEMPLATES ---
+    const getPrivacyPolicyTemplate = (data) => `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Politique de Confidentialité</title>
+    <style>body{font-family:sans-serif;line-height:1.6;padding:20px;max-width:800px;margin:auto;}h1,h2{color:#333;}</style>
+</head>
+<body>
+    <h1>Politique de Confidentialité</h1>
+    <p>Dernière mise à jour : ${new Date().toLocaleDateString('fr-FR')}</p>
+    
+    <h2>1. Préambule</h2>
+    <p>La présente politique de confidentialité a pour but d'informer les utilisateurs du site ${data.siteName} (${data.siteUrl}) des modalités de collecte, d'utilisation et de protection de leurs données personnelles par ${data.companyName}, responsable du traitement.</p>
+
+    <h2>2. Responsable du traitement</h2>
+    <p>Le responsable du traitement des données est ${data.companyName}, situé(e) à ${data.companyAddress}. Pour toute question relative à la protection de vos données, vous pouvez nous contacter à l'adresse suivante : ${data.contactEmail}.</p>
+
+    <h2>3. Données collectées</h2>
+    <p>Nous collectons les données suivantes lorsque vous utilisez notre site :</p>
+    <ul>${data.dataCollected.map(d => `<li>${d}</li>`).join('')}</ul>
+    
+    <h2>4. Finalités de la collecte</h2>
+    <p>Vos données sont collectées pour les finalités suivantes : ${data.collectionPurpose}.</p>
+
+    <h2>5. Durée de conservation</h2>
+    <p>Vos données sont conservées pour une durée qui n'excède pas la durée nécessaire aux finalités pour lesquelles elles ont été collectées.</p>
+
+    <h2>6. Vos droits</h2>
+    <p>Conformément au RGPD, vous disposez d'un droit d'accès, de rectification, de suppression, de portabilité et d'opposition au traitement de vos données. Vous pouvez exercer ces droits en nous contactant à ${data.contactEmail}.</p>
+
+    <h2>7. Cookies</h2>
+    <p>Pour plus d'informations sur l'utilisation des cookies sur notre site, veuillez consulter notre <a href="./politique-cookies.html">Politique de Cookies</a>.</p>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>`;
+
+    const getCookiePolicyTemplate = (data) => `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Politique de Cookies</title>
+    <style>body{font-family:sans-serif;line-height:1.6;padding:20px;max-width:800px;margin:auto;}h1,h2{color:#333;}</style>
+</head>
+<body>
+    <h1>Politique de Cookies</h1>
+    <p>Dernière mise à jour : ${new Date().toLocaleDateString('fr-FR')}</p>
+
+    <h2>1. Qu'est-ce qu'un cookie ?</h2>
+    <p>Un cookie est un petit fichier texte déposé sur votre terminal (ordinateur, tablette, mobile) lors de votre visite sur un site. Il a pour but de collecter des informations relatives à votre navigation et de vous adresser des services personnalisés.</p>
+
+    <h2>2. Les cookies utilisés sur notre site</h2>
+    <p>Nous utilisons les types de cookies suivants :</p>
+    <ul>${data.cookieTypes.map(c => `<li>${c}</li>`).join('')}</ul>
+
+    <h2>3. Cookies tiers</h2>
+    <p>Notre site utilise des services tiers susceptibles de déposer des cookies sur votre terminal. Il s'agit notamment de :</p>
+    <ul>${data.thirdPartyServices.map(s => `<li>${s}</li>`).join('')}</ul>
+    <p>Nous ne contrôlons pas ces cookies. Nous vous invitons à consulter les politiques de confidentialité de ces services pour en savoir plus.</p>
+
+    <h2>4. Gérer vos préférences</h2>
+    <p>Vous pouvez à tout moment choisir de désactiver ces cookies. Votre navigateur peut également être paramétré pour vous signaler les cookies qui sont déposés dans votre terminal et vous demander de les accepter ou non.</p>
+</body>
+</html>`;
+
+    // --- WIZARD LOGIC ---
+    const { jsPDF } = window.jspdf;
+    let currentStep = 1;
+    const totalSteps = 4;
+
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const form = document.getElementById('policy-form');
+    const progressSteps = document.querySelectorAll('.progress-step');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    
+    function showStep(stepNumber) {
+        document.querySelectorAll('#policy-form fieldset').forEach(fieldset => {
+            fieldset.classList.remove('active');
+        });
+        document.querySelector(`#policy-form fieldset[data-step="${stepNumber}"]`).classList.add('active');
+        updateProgressBar(stepNumber);
+        updateNavButtons(stepNumber);
+    }
+    
+    function updateProgressBar(stepNumber) {
+        progressSteps.forEach(step => {
+            step.classList.toggle('active', step.dataset.step <= stepNumber);
+        });
+    }
+
+    function updateNavButtons(stepNumber) {
+        prevBtn.style.visibility = (stepNumber > 1) ? 'visible' : 'hidden';
+        nextBtn.style.display = (stepNumber === totalSteps) ? 'none' : 'inline-flex';
+        if (stepNumber === totalSteps - 1) {
+            nextBtn.textContent = 'Terminer';
+        } else {
+            nextBtn.textContent = 'Suivant';
+        }
+    }
+
+    function validateStep(stepNumber) {
+        const currentFieldset = document.querySelector(`fieldset[data-step="${stepNumber}"]`);
+        const inputs = currentFieldset.querySelectorAll('input[required], textarea[required]');
+        let isValid = true;
+        inputs.forEach(input => {
+            input.classList.remove('is-invalid');
+            if (!input.value.trim()) {
+                isValid = false;
+                input.classList.add('is-invalid');
+            }
+        });
+        return isValid;
+    }
+
+    nextBtn.addEventListener('click', () => {
+        if (validateStep(currentStep) && currentStep < totalSteps) {
+            currentStep++;
+            showStep(currentStep);
+        }
+    });
+
+    prevBtn.addEventListener('click', () => {
+        if (currentStep > 1) {
+            currentStep--;
+            showStep(currentStep);
+        }
+    });
+    
+    // --- FILE GENERATION ---
+    function getFormData() {
+      return {
+        siteName: document.getElementById('site-name').value,
+        siteUrl: document.getElementById('site-url').value,
+        companyName: document.getElementById('company-name').value,
+        companyAddress: document.getElementById('company-address').value,
+        contactEmail: document.getElementById('contact-email').value,
+        dataCollected: Array.from(document.querySelectorAll('input[name="data-collected"]:checked')).map(el => el.value),
+        collectionPurpose: document.getElementById('collection-purpose').value,
+        cookieTypes: Array.from(document.querySelectorAll('input[name="cookie-types"]:checked')).map(el => el.value),
+        thirdPartyServices: document.getElementById('third-party-services').value.split('\\n').filter(s => s.trim() !== '')
+      };
+    }
+
+    async function downloadFiles(format) {
+        loadingOverlay.style.display = 'flex';
+        const data = getFormData();
+        const zip = new JSZip();
+
+        const privacyPolicyHTML = getPrivacyPolicyTemplate(data);
+        const cookiePolicyHTML = getCookiePolicyTemplate(data);
+
+        if (format === 'html') {
+            zip.file('politique-de-confidentialite.html', privacyPolicyHTML);
+            zip.file('politique-cookies.html', cookiePolicyHTML);
+        } else if (format === 'pdf') {
+            const tempDiv = document.createElement('div');
+            document.body.appendChild(tempDiv);
+            
+            tempDiv.innerHTML = privacyPolicyHTML;
+            const privacyPdf = new jsPDF();
+            await privacyPdf.html(tempDiv, {
+                callback: function(pdf) { zip.file('politique-de-confidentialite.pdf', pdf.output('blob')); },
+                x: 10, y: 10, width: 190, windowWidth: 800
+            });
+            
+            tempDiv.innerHTML = cookiePolicyHTML;
+            const cookiePdf = new jsPDF();
+            await cookiePdf.html(tempDiv, {
+                callback: function(pdf) { zip.file('politique-cookies.pdf', pdf.output('blob')); },
+                x: 10, y: 10, width: 190, windowWidth: 800
+            });
+
+            document.body.removeChild(tempDiv);
+        }
+
+        zip.generateAsync({ type: 'blob' }).then(content => {
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(content);
+            link.download = `politiques-site-${data.siteName.replace(/\\s+/g, '-')}.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            loadingOverlay.style.display = 'none';
+        });
+    }
+
+    document.getElementById('download-html').addEventListener('click', () => downloadFiles('html'));
+    document.getElementById('download-pdf').addEventListener('click', () => downloadFiles('pdf'));
+
+    // --- INITIALIZATION ---
+    showStep(currentStep);
+
+    // --- BACKGROUND SCRIPT ---
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+
+        const size = 24;
+        const hexW = 2 * size;
+        const hexH = Math.sqrt(3) * size;
+        const stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)';
+        ctx.lineWidth = 1;
+
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX;
+            const y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i;
+              const px = x + size * Math.cos(a);
+              const py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+  </script>
+</body>
+</html>

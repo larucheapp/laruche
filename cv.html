@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Créateur de CV — La Ruche</title>
+  <meta name="description" content="Créez un CV professionnel en quelques minutes. Choisissez un modèle, personnalisez-le et exportez-le en PDF.">
+  
+  <!-- html2pdf.js for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <style>
+    :root {
+      --color-bg: #FFFFFF;
+      --color-bg-alt: #F7F8FA;
+      --color-border: #E9EAF0;
+      --color-text-primary: #141417;
+      --color-text-secondary: #6B7280;
+      --color-violet: #7C3AED;
+      --color-violet-dark: #6D28D9;
+      --radius-md: 12px;
+      --radius-lg: 14px;
+      --tool-max-w: 480px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; background-color: var(--color-bg); }
+    body {
+      height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--color-text-primary); line-height: 1.5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    body[data-size="default"] { --tool-max-w: 480px; }
+    body[data-size="wide"] { --tool-max-w: 960px; }
+    body[data-size="xl"] { --tool-max-w: 1200px; }
+
+    #bg-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; }
+
+    .app-header {
+      flex-shrink: 0; background: var(--color-bg-alt); border-bottom: 1px solid var(--color-border);
+      padding: 0 24px; display: flex; align-items: center; height: 70px;
+    }
+    .app-header a { display: inline-flex; align-items: center; }
+    .logo-img { height: 70px; width: auto; vertical-align: middle; }
+
+    .main-content {
+      flex-grow: 1; display: flex; justify-content: center;
+      padding: 48px 24px; overflow-y: auto;
+    }
+    .tool-wrapper { display: flex; flex-direction: column; align-items: center; position: relative; width: 100%; max-width: var(--tool-max-w); }
+    .tool-title {
+      font-size: 1.75rem; font-weight: 600; padding: 12px 28px;
+      background: linear-gradient(45deg, var(--color-violet), var(--color-violet-dark));
+      color: #fff; border-radius: var(--radius-md); margin-bottom: -20px; position: relative; z-index: 5;
+      box-shadow: 0 4px 14px -4px rgba(124, 58, 237, .4);
+      text-align: center;
+    }
+    .generator-card {
+      background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+      padding: 28px;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display: flex; flex-direction: column; gap: 24px;
+      position: relative;
+    }
+    
+    /* --- App Specific Styles --- */
+    .view { width: 100%; }
+    #editor-view { display: none; }
+    
+    /* Template Selection */
+    .template-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 20px;
+        padding-top: 40px;
+        width: 100%;
+    }
+    .template-card {
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        cursor: pointer;
+        transition: transform .2s ease, box-shadow .2s ease;
+        background: var(--color-bg);
+    }
+    .template-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 15px -4px rgb(0 0 0 / 7%);
+        border-color: var(--color-violet);
+    }
+    .template-preview-img {
+        width: 100%;
+        display: block;
+        background-color: var(--color-bg-alt);
+        border-bottom: 1px solid var(--color-border);
+        aspect-ratio: 1 / 1.414; /* A4 ratio */
+    }
+    .template-name {
+        padding: 12px;
+        font-weight: 500;
+        font-size: 15px;
+        text-align: center;
+        color: var(--color-text-primary);
+    }
+    
+    /* Editor */
+    .editor-grid {
+      display: grid;
+      grid-template-columns: 400px 1fr;
+      gap: 24px;
+      width: 100%;
+      padding-top: 40px;
+    }
+    #form-card { max-height: calc(100vh - 200px); overflow-y: auto; padding:20px; }
+    #preview-card { 
+        padding: 0;
+        overflow: hidden; 
+        background-color: #E9EAF0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    .cv-preview-wrapper-styling { 
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-label { font-weight: 500; color: var(--color-text-primary); font-size: 14px; }
+    .form-input, .form-textarea {
+      width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+      font-size: 1rem; color: var(--color-text-primary); background: var(--color-bg);
+      transition: border-color .2s, box-shadow .2s; font-family: inherit;
+    }
+    .form-input:focus, .form-textarea:focus { outline: none; border-color: var(--color-violet); box-shadow: 0 0 0 3px rgba(124, 58, 237, .2); }
+    .form-textarea { resize: vertical; min-height: 80px; }
+    
+    fieldset { border: none; padding: 0; display: flex; flex-direction: column; gap: 16px; }
+    legend { font-size: 1.1rem; font-weight: 600; margin-bottom: 16px; padding-top: 16px; border-top: 1px solid var(--color-border); width: 100%; }
+    .dynamic-item { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 16px; position: relative; display:flex; flex-direction:column; gap: 12px; }
+    
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      font-weight: 500; padding: 10px 16px; border-radius: var(--radius-md); border: none; cursor: pointer;
+      transition: background-color .2s, box-shadow .2s; font-size: 14px;
+    }
+    .btn:focus-visible { outline: 2px solid transparent; outline-offset: 2px; box-shadow: 0 0 0 3px rgba(124, 58, 237, .4); }
+    .btn-primary { background: var(--color-violet); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--color-violet-dark); }
+    .btn-primary:disabled { background: #A78BFA; cursor: not-allowed; }
+    .btn-secondary { background: var(--color-bg-alt); color: var(--color-text-secondary); border: 1px solid var(--color-border); }
+    .btn-secondary:hover { background: #F0F1F3; }
+    .btn-danger { position: absolute; top: -10px; right: -10px; background: #FEE2E2; color: #DC2626; border-radius: 50%; width: 24px; height: 24px; padding: 0; font-size: 16px; line-height: 1; }
+    .btn-danger:hover { background: #FECACA; }
+    .actions { display: flex; gap: 12px; margin-top: 16px; }
+
+    .loading-overlay {
+        position: absolute; inset: 0; background-color: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(4px); display: none; flex-direction: column; align-items: center; justify-content: center;
+        z-index: 10; border-radius: var(--radius-lg); text-align: center;
+    }
+    .loading-overlay.visible { display: flex; }
+    .loader-icon { width: 32px; height: 32px; border: 3px solid rgba(124, 58, 237, 0.2); border-top-color: var(--color-violet); border-radius: 50%; animation: spin 1s linear infinite; }
+    #export-status { margin-top: 12px; font-weight: 500; color: var(--color-text-secondary); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* --- CV Preview Styles (Scoped) --- */
+    .cv-preview {
+        width: 210mm;
+        height: 297mm;
+        background: white;
+        color: #333;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 10pt;
+        line-height: 1.4;
+    }
+    
+    /* Template: Classique */
+    .cv-preview-wrapper-styling[data-template="classique"] .cv-preview, .cv-preview.classique {
+        padding: 20mm;
+    }
+    .cv-preview-wrapper-styling[data-template="classique"] .cv-header, .cv-preview.classique .cv-header { text-align: center; margin-bottom: 10mm; }
+    .cv-preview-wrapper-styling[data-template="classique"] .cv-name, .cv-preview.classique .cv-name { font-size: 24pt; font-weight: bold; color: #000; margin: 0; letter-spacing: 2px; }
+    .cv-preview-wrapper-styling[data-template="classique"] .cv-title, .cv-preview.classique .cv-title { font-size: 12pt; color: #555; margin: 2mm 0; }
+    .cv-preview-wrapper-styling[data-template="classique"] .cv-contact, .cv-preview.classique .cv-contact { font-size: 9pt; color: #444; }
+    .cv-preview-wrapper-styling[data-template="classique"] .cv-section, .cv-preview.classique .cv-section { margin-bottom: 8mm; }
+    .cv-preview-wrapper-styling[data-template="classique"] .cv-section-title, .cv-preview.classique .cv-section-title { font-size: 14pt; font-weight: bold; color: #000; border-bottom: 2px solid #000; padding-bottom: 2mm; margin-bottom: 4mm; text-transform: uppercase; }
+    .cv-preview-wrapper-styling[data-template="classique"] .cv-item-title, .cv-preview.classique .cv-item-title { font-size: 11pt; font-weight: bold; }
+    .cv-preview-wrapper-styling[data-template="classique"] .cv-item-subtitle, .cv-preview.classique .cv-item-subtitle { font-size: 10pt; font-style: italic; color: #555; }
+    .cv-preview-wrapper-styling[data-template="classique"] .cv-item-content, .cv-preview.classique .cv-item-content { font-size: 10pt; margin-top: 2mm; white-space: pre-wrap; }
+    .cv-preview-wrapper-styling[data-template="classique"] .cv-skills-list, .cv-preview.classique .cv-skills-list { list-style: none; padding: 0; column-count: 3; }
+
+    /* Template: Moderne */
+    .cv-preview-wrapper-styling[data-template="moderne"] .cv-preview, .cv-preview.moderne { display: flex; }
+    .cv-preview-wrapper-styling[data-template="moderne"] .cv-sidebar, .cv-preview.moderne .cv-sidebar { width: 70mm; background: #2c3e50; color: white; padding: 15mm; }
+    .cv-preview-wrapper-styling[data-template="moderne"] .cv-photo, .cv-preview.moderne .cv-photo { width: 40mm; height: 40mm; border-radius: 50%; object-fit: cover; margin: 0 auto 8mm; display: block; background: #bdc3c7; }
+    .cv-preview-wrapper-styling[data-template="moderne"] .cv-sidebar .cv-section-title, .cv-preview.moderne .cv-sidebar .cv-section-title { color: white; font-size: 12pt; border-bottom: 1px solid #7f8c8d; }
+    .cv-preview-wrapper-styling[data-template="moderne"] .cv-sidebar .cv-contact, .cv-preview.moderne .cv-sidebar .cv-contact { font-size: 9pt; }
+    .cv-preview-wrapper-styling[data-template="moderne"] .cv-sidebar .cv-contact p, .cv-preview.moderne .cv-sidebar .cv-contact p { margin: 2mm 0; word-break: break-word; }
+    .cv-preview-wrapper-styling[data-template="moderne"] .cv-sidebar .cv-skills-list, .cv-preview.moderne .cv-sidebar .cv-skills-list { list-style: none; padding: 0; }
+    .cv-preview-wrapper-styling[data-template="moderne"] .cv-main, .cv-preview.moderne .cv-main { flex: 1; padding: 15mm; }
+    .cv-preview-wrapper-styling[data-template="moderne"] .cv-name, .cv-preview.moderne .cv-name { font-size: 28pt; font-weight: 300; color: #2c3e50; margin: 0; }
+    .cv-preview-wrapper-styling[data-template="moderne"] .cv-title, .cv-preview.moderne .cv-title { font-size: 14pt; font-weight: 300; color: #2980b9; margin: 2mm 0 8mm 0; }
+    .cv-preview-wrapper-styling[data-template="moderne"] .cv-main .cv-section-title, .cv-preview.moderne .cv-main .cv-section-title { font-size: 14pt; color: #2980b9; font-weight: bold; border-bottom: 2px solid #bdc3c7; }
+    .cv-preview-wrapper-styling[data-template="moderne"] .cv-item, .cv-preview.moderne .cv-item { margin-bottom: 6mm; }
+    .cv-preview-wrapper-styling[data-template="moderne"] .cv-item-header, .cv-preview.moderne .cv-item-header { display: flex; justify-content: space-between; align-items: baseline; }
+    .cv-preview-wrapper-styling[data-template="moderne"] .cv-item-title, .cv-preview.moderne .cv-item-title { font-size: 11pt; font-weight: bold; }
+    .cv-preview-wrapper-styling[data-template="moderne"] .cv-item-subtitle, .cv-preview.moderne .cv-item-subtitle { font-size: 10pt; font-style: italic; color: #555; }
+    .cv-preview-wrapper-styling[data-template="moderne"] .cv-item-content, .cv-preview.moderne .cv-item-content { font-size: 10pt; margin-top: 2mm; white-space: pre-wrap; }
+
+    /* Template: Créatif */
+    .cv-preview-wrapper-styling[data-template="creatif"] .cv-preview, .cv-preview.creatif {
+        padding: 0;
+        --accent-color: #0d9488; /* teal-600 */
+    }
+    .cv-preview-wrapper-styling[data-template="creatif"] .cv-header, .cv-preview.creatif .cv-header {
+        background: var(--accent-color);
+        color: white;
+        padding: 10mm 15mm;
+        display: flex;
+        align-items: center;
+        min-height: 50mm;
+    }
+    .cv-preview-wrapper-styling[data-template="creatif"] .cv-photo, .cv-preview.creatif .cv-photo {
+        width: 35mm; height: 35mm; border-radius: 50%;
+        object-fit: cover; border: 3px solid white;
+        margin-right: 10mm; flex-shrink: 0;
+        background: #f1f5f9; /* slate-100 */
+    }
+    .cv-preview-wrapper-styling[data-template="creatif"] .cv-name, .cv-preview.creatif .cv-name { font-size: 26pt; font-weight: bold; margin: 0; }
+    .cv-preview-wrapper-styling[data-template="creatif"] .cv-title, .cv-preview.creatif .cv-title { font-size: 13pt; font-weight: normal; margin: 1mm 0 0 0; opacity: 0.9; }
+    .cv-preview-wrapper-styling[data-template="creatif"] .cv-body, .cv-preview.creatif .cv-body { display: flex; padding: 10mm 0; }
+    .cv-preview-wrapper-styling[data-template="creatif"] .cv-sidebar, .cv-preview.creatif .cv-sidebar { width: 65mm; padding: 0 10mm 0 15mm; }
+    .cv-preview-wrapper-styling[data-template="creatif"] .cv-main, .cv-preview.creatif .cv-main { flex: 1; padding: 0 15mm 0 10mm; border-left: 1px solid #e2e8f0; /* slate-200 */ }
+    .cv-preview-wrapper-styling[data-template="creatif"] .cv-section, .cv-preview.creatif .cv-section { margin-bottom: 8mm; }
+    .cv-preview-wrapper-styling[data-template="creatif"] .cv-section-title, .cv-preview.creatif .cv-section-title { font-size: 13pt; font-weight: bold; color: var(--accent-color); margin-bottom: 4mm; text-transform: uppercase; }
+    .cv-preview-wrapper-styling[data-template="creatif"] .cv-contact p, .cv-preview.creatif .cv-contact p { margin-bottom: 2mm; font-size: 9pt; word-break: break-word; }
+    .cv-preview-wrapper-styling[data-template="creatif"] .cv-skills-list, .cv-preview.creatif .cv-skills-list { list-style: none; padding: 0; font-size: 9pt; }
+    .cv-preview-wrapper-styling[data-template="creatif"] .cv-item-title, .cv-preview.creatif .cv-item-title { font-size: 11pt; font-weight: bold; }
+    .cv-preview-wrapper-styling[data-template="creatif"] .cv-item-subtitle, .cv-preview.creatif .cv-item-subtitle { font-size: 10pt; font-style: italic; color: #555; margin-bottom: 2mm; }
+    .cv-preview-wrapper-styling[data-template="creatif"] .cv-item-content, .cv-preview.creatif .cv-item-content { font-size: 10pt; white-space: pre-wrap; }
+
+    /* Template: Minimaliste */
+    .cv-preview-wrapper-styling[data-template="minimaliste"] .cv-preview, .cv-preview.minimaliste { padding: 25mm; }
+    .cv-preview-wrapper-styling[data-template="minimaliste"] .cv-header, .cv-preview.minimaliste .cv-header { text-align: center; margin-bottom: 15mm; }
+    .cv-preview-wrapper-styling[data-template="minimaliste"] .cv-name, .cv-preview.minimaliste .cv-name { font-size: 28pt; font-weight: 300; letter-spacing: 4px; text-transform: uppercase; margin: 0; }
+    .cv-preview-wrapper-styling[data-template="minimaliste"] .cv-title, .cv-preview.minimaliste .cv-title { font-size: 12pt; font-weight: normal; color: #666; margin: 2mm 0 5mm 0; }
+    .cv-preview-wrapper-styling[data-template="minimaliste"] .cv-contact, .cv-preview.minimaliste .cv-contact { font-size: 9pt; color: #444; }
+    .cv-preview-wrapper-styling[data-template="minimaliste"] .cv-section, .cv-preview.minimaliste .cv-section { margin-bottom: 12mm; }
+    .cv-preview-wrapper-styling[data-template="minimaliste"] .cv-section-title, .cv-preview.minimaliste .cv-section-title { font-size: 12pt; font-weight: 500; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 6mm; }
+    .cv-preview-wrapper-styling[data-template="minimaliste"] .cv-item, .cv-preview.minimaliste .cv-item { margin-bottom: 6mm; }
+    .cv-preview-wrapper-styling[data-template="minimaliste"] .cv-item-header, .cv-preview.minimaliste .cv-item-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1mm; }
+    .cv-preview-wrapper-styling[data-template="minimaliste"] .cv-item-title, .cv-preview.minimaliste .cv-item-title { font-size: 11pt; font-weight: 500; }
+    .cv-preview-wrapper-styling[data-template="minimaliste"] .cv-item-subtitle, .cv-preview.minimaliste .cv-item-subtitle { font-size: 10pt; color: #777; }
+    .cv-preview-wrapper-styling[data-template="minimaliste"] .cv-item-content, .cv-preview.minimaliste .cv-item-content { font-size: 10pt; color: #333; white-space: pre-wrap; }
+    .cv-preview-wrapper-styling[data-template="minimaliste"] .cv-skills-list, .cv-preview.minimaliste .cv-skills-list { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+    .cv-preview-wrapper-styling[data-template="minimaliste"] .cv-skills-list li, .cv-preview.minimaliste .cv-skills-list li { font-size: 10pt; }
+
+    /* Template: Académique */
+    .cv-preview-wrapper-styling[data-template="academique"] .cv-preview, .cv-preview.academique { font-family: 'Georgia', 'Times New Roman', serif; padding: 20mm; }
+    .cv-preview-wrapper-styling[data-template="academique"] .cv-name, .cv-preview.academique .cv-name { text-align: center; font-size: 22pt; font-weight: bold; }
+    .cv-preview-wrapper-styling[data-template="academique"] .cv-contact, .cv-preview.academique .cv-contact { text-align: center; font-size: 9pt; margin: 4mm 0 10mm 0; }
+    .cv-preview-wrapper-styling[data-template="academique"] .cv-section-title, .cv-preview.academique .cv-section-title { font-size: 13pt; font-weight: bold; text-transform: uppercase; border-bottom: 1px solid #333; margin-bottom: 4mm; padding-bottom: 2mm;}
+    .cv-preview-wrapper-styling[data-template="academique"] .cv-item-title, .cv-preview.academique .cv-item-title { font-weight: bold; }
+    .cv-preview-wrapper-styling[data-template="academique"] .cv-item, .cv-preview.academique .cv-item { margin-bottom: 5mm; }
+    
+    /* Template: Tech */
+    .cv-preview-wrapper-styling[data-template="tech"] .cv-preview, .cv-preview.tech { display: flex; --accent-color: #1d4ed8; }
+    .cv-preview-wrapper-styling[data-template="tech"] .cv-sidebar, .cv-preview.tech .cv-sidebar { width: 75mm; background: #f3f4f6; padding: 15mm; }
+    .cv-preview-wrapper-styling[data-template="tech"] .cv-photo, .cv-preview.tech .cv-photo { width: 45mm; height: 45mm; border-radius: 50%; object-fit: cover; margin: 0 auto 8mm; display: block; background: #d1d5db; border: 4px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    .cv-preview-wrapper-styling[data-template="tech"] .cv-sidebar .cv-section-title, .cv-preview.tech .cv-sidebar .cv-section-title { color: var(--accent-color); font-size: 12pt; text-transform: uppercase; letter-spacing: 1px;}
+    .cv-preview-wrapper-styling[data-template="tech"] .cv-main, .cv-preview.tech .cv-main { flex: 1; padding: 15mm 15mm 15mm 10mm; }
+    .cv-preview-wrapper-styling[data-template="tech"] .cv-name, .cv-preview.tech .cv-name { font-size: 26pt; font-weight: bold; color: #111827; }
+    .cv-preview-wrapper-styling[data-template="tech"] .cv-title, .cv-preview.tech .cv-title { font-size: 13pt; font-weight: 300; color: var(--accent-color); margin-bottom: 8mm;}
+    .cv-preview-wrapper-styling[data-template="tech"] .cv-main .cv-section-title, .cv-preview.tech .cv-main .cv-section-title { font-size: 14pt; color: #111827; font-weight: bold; border-bottom: 2px solid var(--accent-color); }
+
+    /* Template: Commercial */
+    .cv-preview-wrapper-styling[data-template="commercial"] .cv-preview, .cv-preview.commercial { --accent-color: #be123c; padding: 18mm; }
+    .cv-preview-wrapper-styling[data-template="commercial"] .cv-header, .cv-preview.commercial .cv-header { display:flex; align-items: center; border-bottom: 4px solid var(--accent-color); padding-bottom: 8mm; margin-bottom: 8mm;}
+    .cv-preview-wrapper-styling[data-template="commercial"] .cv-photo, .cv-preview.commercial .cv-photo { width: 40mm; height: 40mm; border-radius: 50%; object-fit: cover; background: #e2e8f0; margin-right: 10mm;}
+    .cv-preview-wrapper-styling[data-template="commercial"] .cv-name, .cv-preview.commercial .cv-name { font-size: 28pt; font-weight: 900; color: #000; line-height: 1.1;}
+    .cv-preview-wrapper-styling[data-template="commercial"] .cv-title, .cv-preview.commercial .cv-title { font-size: 14pt; font-weight: 300; color: #333;}
+    .cv-preview-wrapper-styling[data-template="commercial"] .cv-section-title, .cv-preview.commercial .cv-section-title { color: var(--accent-color); font-size: 14pt; font-weight: bold; text-transform: uppercase; }
+    .cv-preview-wrapper-styling[data-template="commercial"] .cv-item-content ul, .cv-preview.commercial .cv-item-content ul { padding-left: 5mm; }
+
+    /* Template: Designer */
+    .cv-preview-wrapper-styling[data-template="designer"] .cv-preview, .cv-preview.designer { padding: 0; --accent-color: #db2777; --bg-color: #fdf2f8; }
+    .cv-preview-wrapper-styling[data-template="designer"] .cv-header, .cv-preview.designer .cv-header { background: var(--bg-color); padding: 20mm; text-align: center; }
+    .cv-preview-wrapper-styling[data-template="designer"] .cv-photo, .cv-preview.designer .cv-photo { width: 50mm; height: 50mm; border-radius: 50%; object-fit: cover; background: white; border: 4px solid var(--accent-color); margin: 0 auto 5mm; display: block; }
+    .cv-preview-wrapper-styling[data-template="designer"] .cv-name, .cv-preview.designer .cv-name { font-size: 24pt; font-weight: bold; color: var(--accent-color); text-transform: uppercase; letter-spacing: 2px;}
+    .cv-preview-wrapper-styling[data-template="designer"] .cv-title, .cv-preview.designer .cv-title { font-size: 12pt; }
+    .cv-preview-wrapper-styling[data-template="designer"] .cv-body, .cv-preview.designer .cv-body { padding: 15mm 20mm; }
+    .cv-preview-wrapper-styling[data-template="designer"] .cv-section-title, .cv-preview.designer .cv-section-title { text-align: center; font-size: 14pt; font-weight: bold; color: var(--accent-color); margin-bottom: 6mm; }
+
+    /* Template: Junior */
+    .cv-preview-wrapper-styling[data-template="junior"] .cv-preview, .cv-preview.junior { --accent-color: #16a34a; padding: 20mm; }
+    .cv-preview-wrapper-styling[data-template="junior"] .cv-header, .cv-preview.junior .cv-header { text-align: center; margin-bottom: 10mm; }
+    .cv-preview-wrapper-styling[data-template="junior"] .cv-name, .cv-preview.junior .cv-name { color: var(--accent-color); font-size: 26pt; font-weight: bold; }
+    .cv-preview-wrapper-styling[data-template="junior"] .cv-section-title, .cv-preview.junior .cv-section-title { font-size: 13pt; font-weight: bold; color: #000; border-bottom: 2px solid var(--accent-color); padding-bottom: 2mm; margin-bottom: 4mm; text-transform: uppercase; }
+
+    /* Template: Exécutif */
+    .cv-preview-wrapper-styling[data-template="executif"] .cv-preview, .cv-preview.executif { font-family: 'Georgia', serif; padding: 25mm; }
+    .cv-preview-wrapper-styling[data-template="executif"] .cv-header, .cv-preview.executif .cv-header { text-align: center; padding-bottom: 8mm; margin-bottom: 8mm; border-bottom: 1px solid #ccc; }
+    .cv-preview-wrapper-styling[data-template="executif"] .cv-name, .cv-preview.executif .cv-name { font-size: 24pt; letter-spacing: 3px; text-transform: uppercase; }
+    .cv-preview-wrapper-styling[data-template="executif"] .cv-section-title, .cv-preview.executif .cv-section-title { text-align: center; font-size: 12pt; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 6mm; }
+
+    /* Template: Médical */
+    .cv-preview-wrapper-styling[data-template="medical"] .cv-preview, .cv-preview.medical { --accent-color: #0284c7; padding: 20mm; font-family: 'Arial', sans-serif; }
+    .cv-preview-wrapper-styling[data-template="medical"] .cv-header, .cv-preview.medical .cv-header { border-left: 5mm solid var(--accent-color); padding-left: 8mm; margin-bottom: 10mm; }
+    .cv-preview-wrapper-styling[data-template="medical"] .cv-name, .cv-preview.medical .cv-name { font-size: 26pt; font-weight: bold; }
+    .cv-preview-wrapper-styling[data-template="medical"] .cv-section-title, .cv-preview.medical .cv-section-title { color: var(--accent-color); font-size: 14pt; font-weight: bold; text-transform: uppercase; }
+    
+    /* Template: Juridique */
+    .cv-preview-wrapper-styling[data-template="juridique"] .cv-preview, .cv-preview.juridique { font-family: 'Times New Roman', serif; padding: 22mm; line-height: 1.3; font-size: 11pt; }
+    .cv-preview-wrapper-styling[data-template="juridique"] .cv-header, .cv-preview.juridique .cv-header { text-align: center; margin-bottom: 8mm; }
+    .cv-preview-wrapper-styling[data-template="juridique"] .cv-name, .cv-preview.juridique .cv-name { font-size: 20pt; font-weight: bold; }
+    .cv-preview-wrapper-styling[data-template="juridique"] .cv-section-title, .cv-preview.juridique .cv-section-title { font-size: 12pt; font-weight: bold; text-transform: uppercase; border-bottom: 1px solid black; padding-bottom: 1mm; margin-bottom: 3mm; }
+    .cv-preview-wrapper-styling[data-template="juridique"] .cv-item-title, .cv-preview.juridique .cv-item-title { font-weight: bold; font-size: 11pt;}
+    .cv-preview-wrapper-styling[data-template="juridique"] .cv-item-subtitle, .cv-preview.juridique .cv-item-subtitle { font-style: italic; font-size: 11pt;}
+
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="xl">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      
+      <!-- VIEW 1: TEMPLATE SELECTION -->
+      <div id="selection-view" class="view">
+        <h1 class="tool-title">Choisissez un modèle de CV</h1>
+        <div id="template-grid" class="template-grid">
+            <!-- Templates will be injected here by JS -->
+        </div>
+      </div>
+
+      <!-- VIEW 2: EDITOR -->
+      <div id="editor-view" class="view">
+        <h1 class="tool-title">Personnalisez votre CV</h1>
+        <div class="editor-grid">
+            
+            <!-- CONTROLS CARD -->
+            <div class="generator-card" id="form-card" role="region" aria-label="Formulaire de personnalisation">
+              <div class="actions">
+                  <button id="back-btn" class="btn btn-secondary">Changer de modèle</button>
+                  <button id="export-btn" class="btn btn-primary" style="flex:1;">Exporter en PDF</button>
+              </div>
+              
+              <form id="cv-form">
+                <fieldset>
+                  <legend>Informations Personnelles</legend>
+                  <div class="form-group" id="photo-group" style="display:none;">
+                      <label for="photo" class="form-label">Photo (recommandé : carré)</label>
+                      <input type="file" id="photo" class="form-input" accept="image/*">
+                  </div>
+                  <div class="form-group">
+                      <label for="name" class="form-label">Nom complet</label>
+                      <input type="text" id="name" data-cv="personal.name" class="form-input" value="Jeanne Dupont">
+                  </div>
+                  <div class="form-group">
+                      <label for="title" class="form-label">Titre / Poste</label>
+                      <input type="text" id="title" data-cv="personal.title" class="form-input" value="Développeuse Web Full-Stack">
+                  </div>
+                  <div class="form-group">
+                      <label for="email" class="form-label">Email</label>
+                      <input type="email" id="email" data-cv="personal.email" class="form-input" value="jeanne.dupont@email.com">
+                  </div>
+                   <div class="form-group">
+                      <label for="phone" class="form-label">Téléphone</label>
+                      <input type="tel" id="phone" data-cv="personal.phone" class="form-input" value="06 12 34 56 78">
+                  </div>
+                  <div class="form-group">
+                      <label for="address" class="form-label">Adresse</label>
+                      <input type="text" id="address" data-cv="personal.address" class="form-input" value="123 Rue de Paris, 75001 Paris">
+                  </div>
+                </fieldset>
+
+                <fieldset>
+                  <legend>Résumé</legend>
+                   <div class="form-group">
+                      <textarea id="summary" data-cv="summary" class="form-textarea">Développeuse web passionnée avec 5 ans d'expérience dans la création d'applications web robustes et performantes. Spécialisée dans l'écosystème JavaScript (React, Node.js) et adepte des méthodologies agiles.</textarea>
+                  </div>
+                </fieldset>
+
+                <fieldset>
+                  <legend>Expériences Professionnelles</legend>
+                  <div id="experiences-container"></div>
+                  <button type="button" id="add-exp-btn" class="btn btn-secondary">Ajouter une expérience</button>
+                </fieldset>
+                
+                <fieldset>
+                  <legend>Formations</legend>
+                  <div id="educations-container"></div>
+                  <button type="button" id="add-edu-btn" class="btn btn-secondary">Ajouter une formation</button>
+                </fieldset>
+
+                <fieldset>
+                  <legend>Compétences</legend>
+                   <div class="form-group">
+                      <label for="skills" class="form-label">Listez vos compétences (séparées par une virgule)</label>
+                      <input type="text" id="skills" data-cv="skills" class="form-input" value="JavaScript, React, Node.js, SQL, Docker, Agile, Git">
+                  </div>
+                </fieldset>
+              </form>
+
+              <div class="loading-overlay" id="loading-overlay">
+                  <div class="loader-icon"></div>
+                  <p id="export-status">Génération du PDF...</p>
+              </div>
+            </div>
+
+            <!-- PREVIEW CARD -->
+            <div class="generator-card" id="preview-card" role="region" aria-label="Aperçu du CV">
+                <div id="cv-preview-wrapper" class="cv-preview-wrapper-styling">
+                    <!-- CV preview will be injected here -->
+                </div>
+            </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // --- TEMPLATES ---
+    const templates = {
+        'classique': {
+            name: 'Classique',
+            hasPhoto: false,
+            preview: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 210 297' style='background:%23fff'%3E%3Crect x='65' y='40' width='80' height='8' fill='%23333'/%3E%3Crect x='75' y='55' width='60' height='4' fill='%23777'/%3E%3Crect x='30' y='80' width='150' height='2' fill='%23333'/%3E%3Crect x='30' y='95' width='150' height='4' fill='%23bbb'/%3E%3Crect x='30' y='105' width='140' height='3' fill='%23ddd'/%3E%3Crect x='30' y='111' width='140' height='3' fill='%23ddd'/%3E%3Crect x='30' y='130' width='150' height='2' fill='%23333'/%3E%3Crect x='30' y='145' width='150' height='4' fill='%23bbb'/%3E%3Crect x='30' y='155' width='140' height='3' fill='%23ddd'/%3E%3C/svg%3E`,
+            render: (data) => `
+                <div class="cv-preview classique">
+                    <header class="cv-header">
+                        <h1 class="cv-name">${data.personal.name}</h1>
+                        <h2 class="cv-title">${data.personal.title}</h2>
+                        <div class="cv-contact">
+                            <span>${data.personal.address}</span> &bull;
+                            <span>${data.personal.phone}</span> &bull;
+                            <span>${data.personal.email}</span>
+                        </div>
+                    </header>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Résumé</h3>
+                        <p class="cv-item-content">${data.summary}</p>
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Expériences</h3>
+                        ${data.experiences.map(exp => `
+                            <div class="cv-item">
+                                <p class="cv-item-title">${exp.title} chez ${exp.company}</p>
+                                <p class="cv-item-subtitle">${exp.period}</p>
+                                <p class="cv-item-content">${exp.description}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Formation</h3>
+                         ${data.educations.map(edu => `
+                            <div class="cv-item">
+                                <p class="cv-item-title">${edu.degree}</p>
+                                <p class="cv-item-subtitle">${edu.school} &mdash; ${edu.period}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Compétences</h3>
+                        <ul class="cv-skills-list">${data.skills.map(s => `<li>${s.trim()}</li>`).join('')}</ul>
+                    </div>
+                </div>`
+        },
+        'moderne': {
+            name: 'Moderne (photo)',
+            hasPhoto: true,
+            preview: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 210 297' style='background:%23fff'%3E%3Crect x='0' y='0' width='70' height='297' fill='%232c3e50'/%3E%3Ccircle cx='35' cy='50' r='22' fill='%23bdc3c7'/%3E%3Crect x='15' y='90' width='40' height='4' fill='%23fff'/%3E%3Crect x='15' y='100' width='35' height='3' fill='%237f8c8d'/%3E%3Crect x='15' y='106' width='35' height='3' fill='%237f8c8d'/%3E%3Crect x='85' y='40' width='100' height='8' fill='%232c3e50'/%3E%3Crect x='85' y='55' width='70' height='4' fill='%232980b9'/%3E%3Crect x='85' y='80' width='110' height='2' fill='%232980b9'/%3E%3Crect x='85' y='95' width='110' height='4' fill='%23bbb'/%3E%3Crect x='85' y='105' width='100' height='3' fill='%23ddd'/%3E%3C/svg%3E`,
+            render: (data) => `
+                <div class="cv-preview moderne">
+                    <aside class="cv-sidebar">
+                        ${data.personal.photo ? `<img src="${data.personal.photo}" alt="Photo de ${data.personal.name}" class="cv-photo">` : `<div class="cv-photo"></div>`}
+                        <div class="cv-section">
+                            <h3 class="cv-section-title">Contact</h3>
+                            <div class="cv-contact">
+                                <p><strong>Adresse:</strong><br>${data.personal.address}</p>
+                                <p><strong>Téléphone:</strong><br>${data.personal.phone}</p>
+                                <p><strong>Email:</strong><br>${data.personal.email}</p>
+                            </div>
+                        </div>
+                         <div class="cv-section">
+                            <h3 class="cv-section-title">Compétences</h3>
+                            <ul class="cv-skills-list">${data.skills.map(s => `<li>${s.trim()}</li>`).join('')}</ul>
+                        </div>
+                    </aside>
+                    <main class="cv-main">
+                        <h1 class="cv-name">${data.personal.name}</h1>
+                        <h2 class="cv-title">${data.personal.title}</h2>
+                         <div class="cv-section">
+                            <h3 class="cv-section-title">Résumé</h3>
+                            <p class="cv-item-content">${data.summary}</p>
+                        </div>
+                         <div class="cv-section">
+                            <h3 class="cv-section-title">Expériences</h3>
+                            ${data.experiences.map(exp => `
+                                <div class="cv-item">
+                                    <div class="cv-item-header">
+                                        <p class="cv-item-title">${exp.title} chez ${exp.company}</p>
+                                        <p class="cv-item-subtitle">${exp.period}</p>
+                                    </div>
+                                    <p class="cv-item-content">${exp.description}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="cv-section">
+                            <h3 class="cv-section-title">Formation</h3>
+                            ${data.educations.map(edu => `
+                                <div class="cv-item">
+                                     <div class="cv-item-header">
+                                        <p class="cv-item-title">${edu.degree}</p>
+                                        <p class="cv-item-subtitle">${edu.period}</p>
+                                    </div>
+                                    <p>${edu.school}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </main>
+                </div>
+            `
+        },
+        'creatif': {
+            name: 'Créatif (photo)',
+            hasPhoto: true,
+            preview: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 210 297' style='background:%23fff'%3E%3Crect x='0' y='0' width='210' height='60' fill='%230d9488'/%3E%3Ccircle cx='40' cy='60' r='25' fill='%23f1f5f9' stroke='%23fff' stroke-width='2'/%3E%3Crect x='85' y='35' width='100' height='8' fill='%23fff'/%3E%3Crect x='85' y='50' width='70' height='4' fill='%23a7f3d0'/%3E%3Crect x='20' y='110' width='170' height='2' fill='%230d9488'/%3E%3Crect x='20' y='125' width='170' height='4' fill='%23bbb'/%3E%3Crect x='20' y='135' width='160' height='3' fill='%23ddd'/%3E%3Crect x='20' y='160' width='170' height='2' fill='%230d9488'/%3E%3Crect x='20' y='175' width='170' height='4' fill='%23bbb'/%3E%3C/svg%3E`,
+            render: (data) => `
+                <div class="cv-preview creatif">
+                    <header class="cv-header">
+                        ${data.personal.photo ? `<img src="${data.personal.photo}" alt="Photo de ${data.personal.name}" class="cv-photo">` : `<div class="cv-photo"></div>`}
+                        <div>
+                            <h1 class="cv-name">${data.personal.name}</h1>
+                            <h2 class="cv-title">${data.personal.title}</h2>
+                        </div>
+                    </header>
+                    <div class="cv-body">
+                        <aside class="cv-sidebar">
+                            <div class="cv-section cv-contact">
+                                <h3 class="cv-section-title">Contact</h3>
+                                <p><strong>Adresse:</strong><br>${data.personal.address}</p>
+                                <p><strong>Téléphone:</strong><br>${data.personal.phone}</p>
+                                <p><strong>Email:</strong><br>${data.personal.email}</p>
+                            </div>
+                            <div class="cv-section">
+                                <h3 class="cv-section-title">Compétences</h3>
+                                <ul class="cv-skills-list">${data.skills.map(s => `<li>${s.trim()}</li>`).join('')}</ul>
+                            </div>
+                        </aside>
+                        <main class="cv-main">
+                            <div class="cv-section">
+                                <h3 class="cv-section-title">Résumé</h3>
+                                <p class="cv-item-content">${data.summary}</p>
+                            </div>
+                            <div class="cv-section">
+                                <h3 class="cv-section-title">Expériences</h3>
+                                ${data.experiences.map(exp => `
+                                    <div class="cv-item">
+                                        <p class="cv-item-title">${exp.title} chez ${exp.company}</p>
+                                        <p class="cv-item-subtitle">${exp.period}</p>
+                                        <p class="cv-item-content">${exp.description}</p>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="cv-section">
+                                <h3 class="cv-section-title">Formation</h3>
+                                ${data.educations.map(edu => `
+                                    <div class="cv-item">
+                                        <p class="cv-item-title">${edu.degree}</p>
+                                        <p class="cv-item-subtitle">${edu.school} &mdash; ${edu.period}</p>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </main>
+                    </div>
+                </div>`
+        },
+        'minimaliste': {
+            name: 'Minimaliste',
+            hasPhoto: false,
+            preview: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 210 297' style='background:%23fff'%3E%3Crect x='40' y='40' width='130' height='10' fill='%23111'/%3E%3Crect x='75' y='58' width='60' height='4' fill='%23777'/%3E%3Crect x='50' y='70' width='110' height='3' fill='%23999'/%3E%3Crect x='30' y='100' width='50' height='4' fill='%23333' style='letter-spacing:2px'/%3E%3Crect x='30' y='115' width='150' height='3' fill='%23bbb'/%3E%3Crect x='30' y='122' width='140' height='3' fill='%23ddd'/%3E%3Crect x='30' y='150' width='50' height='4' fill='%23333' style='letter-spacing:2px'/%3E%3Crect x='30' y='165' width='150' height='3' fill='%23bbb'/%3E%3C/svg%3E`,
+            render: (data) => `
+                <div class="cv-preview minimaliste">
+                    <header class="cv-header">
+                        <h1 class="cv-name">${data.personal.name}</h1>
+                        <h2 class="cv-title">${data.personal.title}</h2>
+                        <div class="cv-contact">
+                            <span>${data.personal.address}</span> &bull;
+                            <span>${data.personal.phone}</span> &bull;
+                            <span>${data.personal.email}</span>
+                        </div>
+                    </header>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Résumé</h3>
+                        <p class="cv-item-content">${data.summary}</p>
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Expériences</h3>
+                        ${data.experiences.map(exp => `
+                            <div class="cv-item">
+                                <div class="cv-item-header">
+                                    <p class="cv-item-title">${exp.title} chez ${exp.company}</p>
+                                    <p class="cv-item-subtitle">${exp.period}</p>
+                                </div>
+                                <p class="cv-item-content">${exp.description}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Formation</h3>
+                        ${data.educations.map(edu => `
+                            <div class="cv-item">
+                                <div class="cv-item-header">
+                                    <p class="cv-item-title">${edu.degree} &mdash; ${edu.school}</p>
+                                    <p class="cv-item-subtitle">${edu.period}</p>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Compétences</h3>
+                        <ul class="cv-skills-list">${data.skills.map(s => `<li>${s.trim()}</li>`).join('')}</ul>
+                    </div>
+                </div>`
+        },
+        'academique': {
+            name: 'Académique',
+            hasPhoto: false,
+            preview: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 210 297' style='background:%23fff'%3E%3Crect x='65' y='30' width='80' height='8' fill='%23333'/%3E%3Crect x='50' y='45' width='110' height='4' fill='%23777'/%3E%3Crect x='30' y='70' width='150' height='2' fill='%23333'/%3E%3Crect x='30' y='85' width='150' height='3' fill='%23bbb'/%3E%3Crect x='30' y='92' width='140' height='3' fill='%23ddd'/%3E%3C/svg%3E`,
+            render: (data) => `
+                <div class="cv-preview academique">
+                    <header class="cv-header">
+                        <h1 class="cv-name">${data.personal.name}</h1>
+                        <h2 class="cv-title">${data.personal.title}</h2>
+                        <div class="cv-contact">
+                            <span>${data.personal.address} | ${data.personal.phone} | ${data.personal.email}</span>
+                        </div>
+                    </header>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Profil Académique</h3>
+                        <p class="cv-item-content">${data.summary}</p>
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Formation</h3>
+                        ${data.educations.map(edu => `<div class="cv-item"><p><span class="cv-item-title">${edu.degree}</span>, ${edu.school}, ${edu.period}</p></div>`).join('')}
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Expérience de Recherche</h3>
+                        ${data.experiences.map(exp => `<div class="cv-item"><p class="cv-item-title">${exp.title}, ${exp.company} (${exp.period})</p><p class="cv-item-content">${exp.description}</p></div>`).join('')}
+                    </div>
+                     <div class="cv-section">
+                        <h3 class="cv-section-title">Compétences</h3>
+                        <p class="cv-item-content">${data.skills.join(', ')}</p>
+                    </div>
+                </div>`
+        },
+        'tech': {
+            name: 'Tech (photo)',
+            hasPhoto: true,
+            preview: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 210 297' style='background:%23fff'%3E%3Crect x='0' y='0' width='75' height='297' fill='%23f3f4f6'/%3E%3Ccircle cx='37.5' cy='50' r='25' fill='%23d1d5db'/%3E%3Crect x='85' y='40' width='100' height='8' fill='%23111827'/%3E%3Crect x='85' y='55' width='70' height='4' fill='%231d4ed8'/%3E%3C/svg%3E`,
+            render: (data) => `
+                <div class="cv-preview tech">
+                    <aside class="cv-sidebar">
+                        ${data.personal.photo ? `<img src="${data.personal.photo}" alt="Photo de ${data.personal.name}" class="cv-photo">` : `<div class="cv-photo"></div>`}
+                        <div class="cv-section">
+                            <h3 class="cv-section-title">Contact</h3>
+                            <p>${data.personal.address}<br>${data.personal.phone}<br>${data.personal.email}</p>
+                        </div>
+                        <div class="cv-section">
+                            <h3 class="cv-section-title">Compétences</h3>
+                            <p>${data.skills.join(', ')}</p>
+                        </div>
+                    </aside>
+                    <main class="cv-main">
+                        <h1 class="cv-name">${data.personal.name}</h1>
+                        <h2 class="cv-title">${data.personal.title}</h2>
+                        <div class="cv-section">
+                            <h3 class="cv-section-title">Résumé</h3>
+                            <p>${data.summary}</p>
+                        </div>
+                        <div class="cv-section">
+                            <h3 class="cv-section-title">Expériences</h3>
+                            ${data.experiences.map(exp => `<div class="cv-item"><p><strong>${exp.title}</strong> | ${exp.company} | ${exp.period}</p><p>${exp.description}</p></div>`).join('')}
+                        </div>
+                        <div class="cv-section">
+                            <h3 class="cv-section-title">Formation</h3>
+                            ${data.educations.map(edu => `<div class="cv-item"><p><strong>${edu.degree}</strong> | ${edu.school} | ${edu.period}</p></div>`).join('')}
+                        </div>
+                    </main>
+                </div>`
+        },
+        'commercial': {
+            name: 'Commercial (photo)',
+            hasPhoto: true,
+            preview: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 210 297' style='background:%23fff'%3E%3Ccircle cx='50' cy='50' r='25' fill='%23e2e8f0'/%3E%3Crect x='90' y='35' width='90' height='10' fill='%23000'/%3E%3Crect x='90' y='50' width='60' height='5' fill='%23555'/%3E%3Crect x='20' y='80' width='170' height='4' fill='%23be123c'/%3E%3C/svg%3E`,
+            render: (data) => `
+                <div class="cv-preview commercial">
+                    <header class="cv-header">
+                        ${data.personal.photo ? `<img src="${data.personal.photo}" alt="Photo de ${data.personal.name}" class="cv-photo">` : `<div class="cv-photo"></div>`}
+                        <div>
+                            <h1 class="cv-name">${data.personal.name}</h1>
+                            <h2 class="cv-title">${data.personal.title}</h2>
+                            <p>${data.personal.address} | ${data.personal.phone} | ${data.personal.email}</p>
+                        </div>
+                    </header>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Profil</h3>
+                        <p>${data.summary}</p>
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Résultats Clés</h3>
+                        ${data.experiences.map(exp => `<div class="cv-item"><strong>${exp.title}, ${exp.company}</strong> (${exp.period})<p class="cv-item-content">${exp.description}</p></div>`).join('')}
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Formation</h3>
+                        ${data.educations.map(edu => `<p><strong>${edu.degree}</strong>, ${edu.school} (${edu.period})</p>`).join('')}
+                    </div>
+                </div>`
+        },
+        'designer': {
+            name: 'Designer (photo)',
+            hasPhoto: true,
+            preview: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 210 297' style='background:%23fff'%3E%3Crect x='0' y='0' width='210' height='90' fill='%23fdf2f8'/%3E%3Ccircle cx='105' cy='60' r='30' fill='white' stroke='%23db2777' stroke-width='3'/%3E%3Crect x='60' y='100' width='90' height='8' fill='%23db2777'/%3E%3C/svg%3E`,
+            render: (data) => `
+                <div class="cv-preview designer">
+                    <header class="cv-header">
+                        ${data.personal.photo ? `<img src="${data.personal.photo}" alt="Photo de ${data.personal.name}" class="cv-photo">` : `<div class="cv-photo"></div>`}
+                        <h1 class="cv-name">${data.personal.name}</h1>
+                        <h2 class="cv-title">${data.personal.title}</h2>
+                        <p>${data.personal.phone} | ${data.personal.email}</p>
+                    </header>
+                    <div class="cv-body">
+                        <div class="cv-section">
+                            <h3 class="cv-section-title">À propos</h3>
+                            <p>${data.summary}</p>
+                        </div>
+                        <div class="cv-section">
+                            <h3 class="cv-section-title">Projets & Expériences</h3>
+                             ${data.experiences.map(exp => `<div class="cv-item"><p><strong>${exp.title} at ${exp.company}</strong> (${exp.period})</p><p>${exp.description}</p></div>`).join('')}
+                        </div>
+                        <div class="cv-section">
+                            <h3 class="cv-section-title">Compétences</h3>
+                            <p>${data.skills.join(' &bull; ')}</p>
+                        </div>
+                    </div>
+                </div>`
+        },
+        'junior': {
+            name: 'Junior',
+            hasPhoto: false,
+            preview: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 210 297' style='background:%23fff'%3E%3Crect x='65' y='40' width='80' height='8' fill='%2316a34a'/%3E%3Crect x='30' y='80' width='150' height='2' fill='%2316a34a'/%3E%3Crect x='30' y='130' width='150' height='2' fill='%2316a34a'/%3E%3C/svg%3E`,
+            render: (data) => `
+                <div class="cv-preview junior">
+                    <header class="cv-header">
+                        <h1 class="cv-name">${data.personal.name}</h1>
+                        <p>${data.personal.address} | ${data.personal.phone} | ${data.personal.email}</p>
+                    </header>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Objectif</h3>
+                        <p>${data.summary}</p>
+                    </div>
+                     <div class="cv-section">
+                        <h3 class="cv-section-title">Formation</h3>
+                        ${data.educations.map(edu => `<div class="cv-item"><p><strong>${edu.degree}</strong> - ${edu.school} (${edu.period})</p></div>`).join('')}
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Expériences</h3>
+                        ${data.experiences.map(exp => `<div class="cv-item"><p><strong>${exp.title}</strong>, ${exp.company} (${exp.period})</p><p>${exp.description}</p></div>`).join('')}
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Compétences</h3>
+                        <p>${data.skills.join(', ')}</p>
+                    </div>
+                </div>`
+        },
+        'executif': {
+            name: 'Exécutif',
+            hasPhoto: false,
+            preview: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 210 297' style='background:%23fff'%3E%3Crect x='50' y='40' width='110' height='8' fill='%23333'/%3E%3Crect x='20' y='60' width='170' height='1' fill='%23ccc'/%3E%3Crect x='70' y='90' width='70' height='4' fill='%23555'/%3E%3C/svg%3E`,
+            render: (data) => `
+                <div class="cv-preview executif">
+                    <header class="cv-header">
+                        <h1 class="cv-name">${data.personal.name}</h1>
+                        <h2 class="cv-title">${data.personal.title}</h2>
+                        <p>${data.personal.address} | ${data.personal.phone} | ${data.personal.email}</p>
+                    </header>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Synthèse de Carrière</h3>
+                        <p>${data.summary}</p>
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Parcours Professionnel</h3>
+                        ${data.experiences.map(exp => `<div class="cv-item"><p><strong>${exp.title}</strong>, ${exp.company} (${exp.period})</p><p>${exp.description}</p></div>`).join('')}
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Formation</h3>
+                        ${data.educations.map(edu => `<p><strong>${edu.degree}</strong>, ${edu.school} (${edu.period})</p>`).join('')}
+                    </div>
+                </div>`
+        },
+        'medical': {
+            name: 'Médical',
+            hasPhoto: false,
+            preview: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 210 297' style='background:%23fff'%3E%3Crect x='20' y='30' width='5' height='40' fill='%230284c7'/%3E%3Crect x='35' y='35' width='120' height='8' fill='%23333'/%3E%3Crect x='35' y='50' width='90' height='4' fill='%23555'/%3E%3C/svg%3E`,
+            render: (data) => `
+                <div class="cv-preview medical">
+                    <header class="cv-header">
+                        <h1 class="cv-name">${data.personal.name}</h1>
+                        <h2 class="cv-title">${data.personal.title}</h2>
+                        <p>${data.personal.address} | ${data.personal.phone} | ${data.personal.email}</p>
+                    </header>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Résumé</h3>
+                        <p>${data.summary}</p>
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Expérience Clinique</h3>
+                        ${data.experiences.map(exp => `<div class="cv-item"><p><strong>${exp.title}</strong>, ${exp.company} (${exp.period})</p><p>${exp.description}</p></div>`).join('')}
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Formation & Diplômes</h3>
+                        ${data.educations.map(edu => `<p><strong>${edu.degree}</strong>, ${edu.school} (${edu.period})</p>`).join('')}
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Licences & Certifications</h3>
+                        <p>${data.skills.join(', ')}</p>
+                    </div>
+                </div>`
+        },
+        'juridique': {
+            name: 'Juridique',
+            hasPhoto: false,
+            preview: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 210 297' style='background:%23fff'%3E%3Crect x='65' y='30' width='80' height='7' fill='%23000'/%3E%3Crect x='50' y='45' width='110' height='3' fill='%23555'/%3E%3Crect x='30' y='70' width='150' height='1' fill='%23000'/%3E%3C/svg%3E`,
+            render: (data) => `
+                <div class="cv-preview juridique">
+                    <header class="cv-header">
+                        <h1 class="cv-name">${data.personal.name}</h1>
+                        <p>${data.personal.address} | ${data.personal.phone} | ${data.personal.email}</p>
+                    </header>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Domaines de Compétence</h3>
+                        <p>${data.summary}</p>
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Expérience Professionnelle</h3>
+                        ${data.experiences.map(exp => `<div class="cv-item"><p><span class="cv-item-title">${exp.company}</span>, ${exp.period}</p><p><span class="cv-item-subtitle">${exp.title}</span></p><p class="cv-item-content">${exp.description}</p></div>`).join('')}
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Formation</h3>
+                        ${data.educations.map(edu => `<div class="cv-item"><p><span class="cv-item-title">${edu.school}</span>, ${edu.period}</p><p>${edu.degree}</p></div>`).join('')}
+                    </div>
+                    <div class="cv-section">
+                        <h3 class="cv-section-title">Barreau</h3>
+                        <p>${data.skills.join(', ')}</p>
+                    </div>
+                </div>`
+        }
+    };
+
+    // --- STATE ---
+    let cvData = {
+        template: 'classique',
+        personal: {
+            photo: null,
+            name: 'Jeanne Dupont',
+            title: 'Développeuse Web Full-Stack',
+            email: 'jeanne.dupont@email.com',
+            phone: '06 12 34 56 78',
+            address: '123 Rue de Paris, 75001 Paris'
+        },
+        summary: "Développeuse web passionnée avec 5 ans d'expérience dans la création d'applications web robustes et performantes. Spécialisée dans l'écosystème JavaScript (React, Node.js) et adepte des méthodologies agiles.",
+        experiences: [
+            { id: Date.now(), title: 'Développeuse Senior', company: 'Tech Solutions Inc.', period: '2020 - Présent', description: 'Développement de nouvelles fonctionnalités pour une application SaaS B2B, migration de l\'architecture legacy vers des microservices, et mentorat des développeurs juniors.' }
+        ],
+        educations: [
+            { id: Date.now(), degree: 'Master en Informatique', school: 'Université de la Sorbonne', period: '2018 - 2020' }
+        ],
+        skills: ['JavaScript', 'React', 'Node.js', 'SQL', 'Docker', 'Agile', 'Git'],
+    };
+
+    // --- DOM ELEMENTS ---
+    const selectionView = document.getElementById('selection-view');
+    const editorView = document.getElementById('editor-view');
+    const templateGrid = document.getElementById('template-grid');
+    const cvForm = document.getElementById('cv-form');
+    const backBtn = document.getElementById('back-btn');
+    const exportBtn = document.getElementById('export-btn');
+    const addExpBtn = document.getElementById('add-exp-btn');
+    const addEduBtn = document.getElementById('add-edu-btn');
+    const experiencesContainer = document.getElementById('experiences-container');
+    const educationsContainer = document.getElementById('educations-container');
+    const photoGroup = document.getElementById('photo-group');
+    const photoInput = document.getElementById('photo');
+    const previewWrapper = document.getElementById('cv-preview-wrapper');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    
+    // --- FUNCTIONS ---
+    function renderTemplateSelection() {
+        templateGrid.innerHTML = Object.entries(templates).map(([key, tpl]) => `
+            <div class="template-card" data-template-id="${key}" role="button" tabindex="0" aria-label="Choisir le modèle ${tpl.name}">
+                <img src="${tpl.preview}" alt="Aperçu du modèle ${tpl.name}" class="template-preview-img">
+                <div class="template-name">${tpl.name}</div>
+            </div>
+        `).join('');
+    }
+
+    function updatePreviewScale() {
+        const previewCard = document.getElementById('preview-card');
+        const cvElement = previewWrapper.querySelector('.cv-preview');
+        if (!previewCard || !cvElement) return;
+
+        const padding = 48;
+        const availableWidth = previewCard.clientWidth - padding;
+        const availableHeight = previewCard.clientHeight - padding;
+        
+        const nativeWidth = 210 * (96 / 25.4); // A4 width in px at 96dpi
+        const nativeHeight = 297 * (96 / 25.4); // A4 height in px at 96dpi
+       
+        const scale = Math.min(availableWidth / nativeWidth, availableHeight / nativeHeight, 1);
+
+        previewWrapper.style.transform = `scale(${scale})`;
+    }
+
+    function renderPreview() {
+        const template = templates[cvData.template];
+        if (template) {
+            previewWrapper.innerHTML = template.render(cvData);
+            previewWrapper.dataset.template = cvData.template;
+        }
+    }
+    
+    function renderDynamicSections() {
+        // Experiences
+        experiencesContainer.innerHTML = cvData.experiences.map((exp, index) => `
+            <div class="dynamic-item" data-id="${exp.id}">
+                <button type="button" class="btn btn-danger" data-action="remove-exp" data-index="${index}">&times;</button>
+                <div class="form-group"><label class="form-label">Poste</label><input type="text" class="form-input" data-cv="experiences[${index}].title" value="${exp.title}"></div>
+                <div class="form-group"><label class="form-label">Entreprise</label><input type="text" class="form-input" data-cv="experiences[${index}].company" value="${exp.company}"></div>
+                <div class="form-group"><label class="form-label">Période</label><input type="text" class="form-input" data-cv="experiences[${index}].period" value="${exp.period}"></div>
+                <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea" data-cv="experiences[${index}].description">${exp.description}</textarea></div>
+            </div>
+        `).join('');
+        
+        // Educations
+        educationsContainer.innerHTML = cvData.educations.map((edu, index) => `
+             <div class="dynamic-item" data-id="${edu.id}">
+                <button type="button" class="btn btn-danger" data-action="remove-edu" data-index="${index}">&times;</button>
+                <div class="form-group"><label class="form-label">Diplôme</label><input type="text" class="form-input" data-cv="educations[${index}].degree" value="${edu.degree}"></div>
+                <div class="form-group"><label class="form-label">Établissement</label><input type="text" class="form-input" data-cv="educations[${index}].school" value="${edu.school}"></div>
+                <div class="form-group"><label class="form-label">Période</label><input type="text" class="form-input" data-cv="educations[${index}].period" value="${edu.period}"></div>
+            </div>
+        `).join('');
+    }
+
+    function handleFormUpdate(e) {
+        const path = e.target.dataset.cv;
+        if (!path) return;
+        
+        const keys = path.replace(/\[(\d+)\]/g, '.$1').split('.');
+        let current = cvData;
+        for (let i = 0; i < keys.length - 1; i++) {
+            current = current[keys[i]];
+        }
+        
+        if (path === 'skills') {
+          current[keys[keys.length - 1]] = e.target.value.split(',').map(s => s.trim());
+        } else {
+          current[keys[keys.length - 1]] = e.target.value;
+        }
+        
+        renderPreview();
+    }
+    
+    function switchToEditor(templateId) {
+        cvData.template = templateId;
+        photoGroup.style.display = templates[templateId].hasPhoto ? 'flex' : 'none';
+        selectionView.style.display = 'none';
+        editorView.style.display = 'block';
+        document.body.dataset.size = 'xl'; // Switch to wide view for editor
+        renderPreview();
+        renderDynamicSections();
+        setTimeout(updatePreviewScale, 50);
+    }
+    
+    function switchToSelection() {
+        editorView.style.display = 'none';
+        selectionView.style.display = 'block';
+        document.body.dataset.size = 'wide'; // Switch back for selection
+    }
+
+    // --- EVENT LISTENERS ---
+    templateGrid.addEventListener('click', (e) => {
+        const card = e.target.closest('.template-card');
+        if (card) {
+            switchToEditor(card.dataset.templateId);
+        }
+    });
+
+    backBtn.addEventListener('click', switchToSelection);
+    
+    cvForm.addEventListener('input', handleFormUpdate);
+    
+    photoInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                cvData.personal.photo = event.target.result;
+                renderPreview();
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+    
+    addExpBtn.addEventListener('click', () => {
+        cvData.experiences.push({ id: Date.now(), title: '', company: '', period: '', description: '' });
+        renderDynamicSections();
+    });
+    
+    addEduBtn.addEventListener('click', () => {
+        cvData.educations.push({ id: Date.now(), degree: '', school: '', period: '' });
+        renderDynamicSections();
+    });
+    
+    experiencesContainer.addEventListener('click', (e) => {
+      if (e.target.dataset.action === 'remove-exp') {
+        cvData.experiences.splice(e.target.dataset.index, 1);
+        renderDynamicSections();
+        renderPreview();
+      }
+    });
+    
+    educationsContainer.addEventListener('click', (e) => {
+      if (e.target.dataset.action === 'remove-edu') {
+        cvData.educations.splice(e.target.dataset.index, 1);
+        renderDynamicSections();
+        renderPreview();
+      }
+    });
+    
+    exportBtn.addEventListener('click', () => {
+        loadingOverlay.classList.add('visible');
+        
+        const template = templates[cvData.template];
+        if (!template) {
+            console.error("Template not found for export.");
+            loadingOverlay.classList.remove('visible');
+            return;
+        }
+
+        // 1. Create a container that mimics the preview wrapper for CSS scoping
+        const exportContainer = document.createElement('div');
+        exportContainer.className = 'cv-preview-wrapper-styling'; // Use class for styling
+        exportContainer.dataset.template = cvData.template;
+
+        // 2. Style it to be off-screen but still in the render tree
+        exportContainer.style.position = 'absolute';
+        exportContainer.style.left = '-9999px';
+        exportContainer.style.top = '0';
+        exportContainer.style.zIndex = '-100';
+
+        // 3. Render the CV inside this container
+        exportContainer.innerHTML = template.render(cvData);
+        
+        // 4. Append to the body so styles are computed
+        document.body.appendChild(exportContainer);
+
+        // 5. The actual element to capture is the CV inside our container
+        const elementToExport = exportContainer.querySelector('.cv-preview');
+
+        const opt = {
+          margin: 0,
+          filename: `CV_${cvData.personal.name.replace(/\s+/g, '_')}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 3, useCORS: true, letterRendering: true },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        
+        // 6. Generate the PDF
+        html2pdf().from(elementToExport).set(opt).save().finally(() => {
+            // 7. Clean up by removing the temporary element
+            document.body.removeChild(exportContainer);
+            loadingOverlay.classList.remove('visible');
+        });
+    });
+
+    window.addEventListener('resize', updatePreviewScale);
+    
+    // --- INITIALIZATION ---
+    switchToSelection(); // Start on selection screen
+    renderTemplateSelection();
+
+    // --- BACKGROUND SCRIPT ---
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+        const size = 24; const hexW = 2 * size; const hexH = Math.sqrt(3) * size; const stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)'; ctx.lineWidth = 1;
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX; const y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i; const px = x + size * Math.cos(a); const py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

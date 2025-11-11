@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Générateur QR Crypto — La Ruche</title>
+  <meta name="description" content="Un outil simple et rapide pour générer un QR code à partir d'une adresse de cryptomonnaie et le télécharger en haute résolution.">
+  
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+  <style>
+    :root {
+      --color-bg: #FFFFFF;
+      --color-bg-alt: #F7F8FA;
+      --color-border: #E9EAF0;
+      --color-text-primary: #141417;
+      --color-text-secondary: #6B7280;
+      --color-violet: #7C3AED;
+      --color-violet-dark: #6D28D9;
+      --radius-md: 12px;
+      --radius-lg: 14px;
+      --tool-max-w: 480px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; background-color: var(--color-bg); }
+    body {
+      height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--color-text-primary); line-height: 1.5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    body[data-size="default"] { --tool-max-w: 480px; }
+    body[data-size="wide"] { --tool-max-w: 960px; } 
+    body[data-size="xl"] { --tool-max-w: 1200px; }
+
+    #bg-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; }
+
+    .app-header {
+      flex-shrink: 0; background: var(--color-bg-alt); border-bottom: 1px solid var(--color-border);
+      padding: 0 24px; display: flex; align-items: center; height: 70px;
+    }
+    .app-header a { display: inline-flex; align-items: center; }
+    .logo-img { height: 70px; width: auto; vertical-align: middle; }
+
+    .main-content {
+      flex-grow: 1; display: flex; 
+      /* FIX: Use flex-start to prevent title from moving up behind header */
+      align-items: flex-start; 
+      justify-content: center;
+      padding: 48px 24px; overflow-y: auto;
+    }
+    .tool-wrapper { display: flex; flex-direction: column; align-items: center; position: relative; }
+    .tool-title {
+      font-size: 1.75rem; font-weight: 600; padding: 12px 28px;
+      background: linear-gradient(45deg, var(--color-violet), var(--color-violet-dark));
+      color: #fff; border-radius: var(--radius-md); margin-bottom: -20px; position: relative; z-index: 5;
+      box-shadow: 0 4px 14px -4px rgba(124, 58, 237, .4);
+    }
+    .generator-card {
+      background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+      padding: 28px; padding-top: 40px; width: 100%; max-width: var(--tool-max-w);
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display: flex; flex-direction: column; gap: 24px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-label { font-weight: 500; color: var(--color-text-primary); }
+    .form-input {
+      width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+      font-size: 1rem; color: var(--color-text-primary); background: var(--color-bg);
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .form-input:focus { outline: none; border-color: var(--color-violet); box-shadow: 0 0 0 3px rgba(124, 58, 237, .2); }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      font-weight: 500; padding: 10px 16px; border-radius: var(--radius-md); border: none; cursor: pointer;
+      transition: background-color .2s, box-shadow .2s; font-size: 14px;
+      width: 100%;
+    }
+    .btn:focus-visible { outline: 2px solid transparent; outline-offset: 2px; box-shadow: 0 0 0 3px rgba(124, 58, 237, .4); }
+    .btn-primary { background: var(--color-violet); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--color-violet-dark); }
+    .btn-primary:disabled { background: #A78BFA; cursor: not-allowed; }
+    
+    #result-container {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        background: var(--color-bg-alt);
+        padding: 24px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--color-border);
+    }
+    #qrcode-preview {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #qrcode-preview img {
+      border-radius: 4px; /* A small touch for the QR code image */
+      background: white;
+      padding: 8px;
+      border: 1px solid var(--color-border);
+    }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="default">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Générateur QR Crypto</h1>
+      <div class="generator-card" role="region" aria-label="Générateur de QR Code pour adresse crypto">
+        <form id="qr-form">
+          <div class="form-group">
+            <label for="crypto-address" class="form-label">Adresse Cryptomonnaie</label>
+            <input type="text" id="crypto-address" class="form-input" placeholder="Collez une adresse BTC, ETH, SOL, etc." required>
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top: 16px;">Générer le QR Code</button>
+        </form>
+
+        <div id="result-container">
+          <div id="qrcode-preview"></div>
+          <button id="download-btn" class="btn btn-primary">Télécharger (.png)</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    const qrForm = document.getElementById('qr-form');
+    const addressInput = document.getElementById('crypto-address');
+    const resultContainer = document.getElementById('result-container');
+    const qrPreview = document.getElementById('qrcode-preview');
+    const downloadBtn = document.getElementById('download-btn');
+    let currentAddress = '';
+
+    qrForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const address = addressInput.value.trim();
+      
+      if (address) {
+        currentAddress = address;
+        qrPreview.innerHTML = '';
+        new QRCode(qrPreview, {
+          text: address,
+          width: 200,
+          height: 200,
+          colorDark: "#141417",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.H
+        });
+        resultContainer.style.display = 'flex';
+      }
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      if (!currentAddress) return;
+
+      // Create a temporary, off-screen container for the high-res QR code
+      const tempDiv = document.createElement('div');
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.left = '-9999px';
+      document.body.appendChild(tempDiv);
+
+      // Generate the 500x500 QR code
+      new QRCode(tempDiv, {
+        text: currentAddress,
+        width: 500,
+        height: 500,
+        colorDark: "#141417",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+      });
+
+      // qrcode.js generates an <img> inside the div. We need to wait for it.
+      // A short timeout is the simplest way to ensure it's rendered.
+      setTimeout(() => {
+        const img = tempDiv.querySelector('img');
+        if (img) {
+          const link = document.createElement('a');
+          link.href = img.src;
+          link.download = 'qrcode-crypto.png';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+        // Clean up the temporary div
+        document.body.removeChild(tempDiv);
+      }, 100);
+    });
+
+    // Background hex grid — CANONICAL VERSION
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+
+        const size = 24;
+        const hexW = 2 * size;
+        const hexH = Math.sqrt(3) * size;
+        const stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)';
+        ctx.lineWidth = 1;
+
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX;
+            const y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i;
+              const px = x + size * Math.cos(a);
+              const py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

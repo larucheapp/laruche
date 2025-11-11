@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Générateur de Pages Légales - La Ruche</title>
+  <meta name="description" content="Créez le pack complet de pages légales pour votre site e-commerce (Mentions Légales, CGV, Confidentialité) via un assistant simple et rapide.">
+  
+  <!-- Les scripts externes sont déplacés ici avec 'defer' pour un chargement fiable et non-bloquant -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
+  
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px; /* par défaut, peut être changé via body[data-size] */
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:flex-start; justify-content:center;
+      padding:48px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+    .form-group{display:flex; flex-direction:column; gap:8px}
+    .form-label{font-weight:500; color:var(--color-text-primary)}
+    .form-input, textarea.form-input{
+      width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      font-size:1rem; color:var(--color-text-primary); background:var(--color-bg);
+      font-family:inherit; line-height: 1.5;
+      transition:border-color .2s, box-shadow .2s;
+    }
+    textarea.form-input { min-height: 100px; resize: vertical; }
+    .form-input:focus{outline:none; border-color:var(--color-violet); box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+    
+    .actions{display:flex; justify-content:flex-end; gap:12px; margin-top: 8px;}
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:500; padding:10px 16px; border-radius:var(--radius-md); border:none; cursor:pointer;
+      transition:background-color .2s, box-shadow .2s; font-size:14px;
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn-secondary { background-color: var(--color-bg-alt); color: var(--color-text-primary); border: 1px solid var(--color-border); }
+    .btn-secondary:hover:not(:disabled) { background-color: #f0f1f3; }
+    .btn-primary{background:var(--color-violet); color:#fff}
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark)}
+    .btn:disabled{opacity: 0.6; cursor:not-allowed}
+    .status-text{font-size:14px; color:var(--color-text-secondary); text-align:center; min-height:21px; margin-top: 16px;}
+
+    .btn .spinner {
+        width: 16px; height: 16px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        display: none;
+    }
+    .btn.loading .spinner { display: block; }
+    .btn.loading .btn-text { display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    /* ===== STYLES WIZARD ===== */
+    .wizard-progress { display: flex; justify-content: space-between; margin-bottom: 24px; }
+    .progress-step {
+        flex: 1; text-align: center; color: var(--color-text-secondary);
+        font-size: 14px; position: relative;
+    }
+    .progress-step::after {
+        content: ''; position: absolute; top: 50%; left: 50%;
+        transform: translateY(-50%); width: 100%; height: 2px;
+        background-color: var(--color-border); z-index: 1;
+    }
+    .progress-step:last-child::after { display: none; }
+    .progress-step .step-circle {
+        display: inline-block; width: 24px; height: 24px; border-radius: 50%;
+        background-color: var(--color-bg); border: 2px solid var(--color-border);
+        color: var(--color-text-secondary); line-height: 20px; font-weight: 500;
+        position: relative; z-index: 2; transition: all .3s ease;
+    }
+    .progress-step.active .step-circle { border-color: var(--color-violet); color: var(--color-violet); font-weight: 600; }
+    .progress-step.completed .step-circle { background-color: var(--color-violet); border-color: var(--color-violet); color: #fff; }
+
+    .wizard-steps .step { display: none; animation: fadeIn .5s; }
+    .wizard-steps .step.active { display: block; }
+    .wizard-nav { display: flex; justify-content: space-between; margin-top: 24px; border-top: 1px solid var(--color-border); padding-top: 24px;}
+    
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+    
+    .result-screen h2 { font-size: 1.5rem; font-weight: 600; text-align: center; margin-bottom: 16px; }
+    .result-screen p { text-align: center; color: var(--color-text-secondary); margin-bottom: 32px; max-width: 600px; margin-left: auto; margin-right: auto;}
+    .result-actions { display: flex; justify-content: center; gap: 24px; }
+    .result-actions .btn { padding: 12px 24px; font-size: 1rem; }
+    .result-actions .btn svg { width: 20px; height: 20px; }
+
+    .error-display { text-align: center; padding: 40px; }
+    .error-display h2 { font-size: 1.2rem; color: var(--color-text-primary); }
+    .error-display p { color: var(--color-text-secondary); margin-top: 8px; }
+    
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="xl">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Générateur de Pages Légales</h1>
+      
+      <div class="generator-card" role="region" aria-label="Assistant de création de pages légales">
+        
+        <div id="legal-wizard">
+
+          <!-- Progress Bar -->
+          <div class="wizard-progress">
+            <div class="progress-step active" data-step="1"><div class="step-circle">1</div> Entreprise</div>
+            <div class="progress-step" data-step="2"><div class="step-circle">2</div> Site Web</div>
+            <div class="progress-step" data-step="3"><div class="step-circle">3</div> Conditions</div>
+            <div class="progress-step" data-step="4"><div class="step-circle">4</div> Données</div>
+            <div class="progress-step" data-step="5"><div class="step-circle">✓</div> Finaliser</div>
+          </div>
+
+          <!-- Steps Container -->
+          <div class="wizard-steps">
+            
+            <!-- Step 1: Company Info -->
+            <div class="step active" data-step="1">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="company-name" class="form-label">Nom de l'entreprise / Marque</label>
+                  <input type="text" id="company-name" class="form-input" placeholder="Ex: La Ruche Créative SAS" required>
+                </div>
+                <div class="form-group">
+                    <label for="company-address" class="form-label">Adresse complète de l'entreprise</label>
+                    <input type="text" id="company-address" class="form-input" placeholder="123 Rue de l'Exemple, 75001 Paris, France" required>
+                </div>
+                <div class="form-group">
+                  <label for="contact-email" class="form-label">Email de contact</label>
+                  <input type="email" id="contact-email" class="form-input" placeholder="contact@votresite.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="company-registration" class="form-label">N° d'immatriculation (SIRET/RCS)</label>
+                    <input type="text" id="company-registration" class="form-input" placeholder="Ex: RCS Paris B 123 456 789" required>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 2: Website Info -->
+            <div class="step" data-step="2">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="website-url" class="form-label">URL de votre site web</label>
+                  <input type="text" id="website-url" class="form-input" placeholder="https://www.votresite.com" required>
+                </div>
+                <div class="form-group">
+                  <label for="publication-director" class="form-label">Directeur de la publication</label>
+                  <input type="text" id="publication-director" class="form-input" placeholder="Prénom et Nom du dirigeant" required>
+                </div>
+                <div class="form-group">
+                  <label for="host-name" class="form-label">Nom de l'hébergeur du site</label>
+                  <input type="text" id="host-name" class="form-input" placeholder="Ex: OVH, Vercel, o2switch" required>
+                </div>
+                <div class="form-group">
+                  <label for="host-address" class="form-label">Adresse de l'hébergeur</label>
+                  <input type="text" id="host-address" class="form-input" placeholder="Adresse complète de l'hébergeur" required>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Step 3: Terms & Conditions -->
+            <div class="step" data-step="3">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="shipping-time" class="form-label">Délai de livraison moyen (en jours)</label>
+                  <input type="text" id="shipping-time" class="form-input" placeholder="Ex: 3 à 5 jours ouvrés" required>
+                </div>
+                <div class="form-group">
+                  <label for="return-period" class="form-label">Délai de rétractation (en jours)</label>
+                  <input type="number" id="return-period" class="form-input" value="14" placeholder="Minimum légal: 14 jours" required>
+                </div>
+                <div class="form-group" style="grid-column: 1 / -1;">
+                  <label for="payment-methods" class="form-label">Moyens de paiement acceptés</label>
+                  <input type="text" id="payment-methods" class="form-input" placeholder="Ex: Carte bancaire, PayPal, Stripe" required>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 4: Data Policy -->
+            <div class="step" data-step="4">
+              <div class="form-grid">
+                <div class="form-group" style="grid-column: 1 / -1;">
+                  <label for="data-collected" class="form-label">Types de données personnelles collectées</label>
+                  <textarea id="data-collected" class="form-input" required>Nom, prénom, adresse postale, adresse e-mail, numéro de téléphone, données de connexion et d'utilisation, informations de paiement.</textarea>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 5: Result Screen -->
+            <div class="step result-screen" data-step="5">
+              <h2>Vos pages légales sont prêtes !</h2>
+              <p>Vos documents ont été générés avec succès à partir des informations fournies. Choisissez le format d'exportation qui vous convient.</p>
+              <div class="result-actions">
+                <button id="export-html-btn" class="btn btn-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.125 2.25h-4.5c-1.125 0-2.062.938-2.062 2.063v15.374c0 1.125.938 2.063 2.063 2.063h12.75c1.125 0 2.063-.938 2.063-2.063V8.625c0-1.125-.938-2.063-2.063-2.063h-4.5M13.5 4.875v-1.5a2.25 2.25 0 00-2.25-2.25h-1.5a2.25 2.25 0 00-2.25 2.25v1.5m6 4.5l-3-3m0 0l-3 3m3-3v12" /></svg>
+                    <span class="btn-text">Exporter en HTML (.zip)</span>
+                    <div class="spinner"></div>
+                </button>
+                <button id="export-pdf-btn" class="btn btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625a1.875 1.875 0 00-1.875 1.875v17.25c0 1.036.84 1.875 1.875 1.875h12.75c1.035 0 1.875-.84 1.875-1.875V10.5M8.25 18.75h.75a2.25 2.25 0 002.25-2.25v-1.5a2.25 2.25 0 00-2.25-2.25h-.75" /></svg>
+                    <span class="btn-text">Exporter en PDF (.zip)</span>
+                    <div class="spinner"></div>
+                </button>
+              </div>
+              <div id="status" class="status-text"></div>
+            </div>
+
+          </div>
+          
+          <!-- Navigation -->
+          <div class="wizard-nav">
+            <button id="prev-btn" class="btn btn-secondary">Précédent</button>
+            <button id="next-btn" class="btn btn-primary">Suivant</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Background hex grid
+    (function(){
+      const c = document.getElementById('bg-canvas'); if(!c) return;
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect(); c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,rect.width,rect.height);
+        const size=24,hexW=2*size,hexH=Math.sqrt(3)*size,stepX=hexW*3/4;
+        ctx.strokeStyle='rgba(124,58,237,0.10)'; ctx.lineWidth=1;
+        for(let r=0;r*hexH<rect.height+hexH;r++) for(let col=0;col*stepX<rect.width+hexW;col++){
+          const x=col*stepX, y=r*hexH+(col%2?hexH/2:0);
+          ctx.beginPath();
+          for(let i=0;i<6;i++){ const a=2*Math.PI/6*i,px=x+size*Math.cos(a),py=y+size*Math.sin(a); if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py); }
+          ctx.closePath(); ctx.stroke();
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true}); draw();
+    })();
+  </script>
+  
+  <script>
+    const runApp = () => {
+        const wizard = document.getElementById('legal-wizard');
+        if (!wizard) {
+            throw new Error("L'élément principal de l'assistant (#legal-wizard) est introuvable.");
+        }
+        
+        // Check for external libraries
+        if (typeof JSZip === 'undefined' || typeof window.jspdf === 'undefined') {
+            throw new Error("Les bibliothèques externes (JSZip, jsPDF) n'ont pas pu être chargées. Vérifiez votre connexion internet ou le bloqueur de publicités.");
+        }
+
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const exportHtmlBtn = document.getElementById('export-html-btn');
+        const exportPdfBtn = document.getElementById('export-pdf-btn');
+        const statusEl = document.getElementById('status');
+        
+        const steps = Array.from(wizard.querySelectorAll('.step'));
+        const progressSteps = Array.from(wizard.querySelectorAll('.progress-step'));
+
+        if (!prevBtn || !nextBtn || !exportHtmlBtn || !exportPdfBtn || !statusEl || steps.length === 0) {
+            throw new Error("Un ou plusieurs éléments de l'interface sont manquants. L'application ne peut pas démarrer.");
+        }
+        
+        let currentStep = 1;
+        const totalSteps = steps.length;
+        const legalData = {};
+
+        const updateUI = () => {
+            steps.forEach(step => {
+                step.classList.toggle('active', parseInt(step.dataset.step) === currentStep);
+            });
+
+            progressSteps.forEach((step, index) => {
+                const stepNum = index + 1;
+                step.classList.toggle('active', stepNum === currentStep);
+                step.classList.toggle('completed', stepNum < currentStep);
+            });
+
+            prevBtn.disabled = currentStep === 1;
+            prevBtn.style.display = currentStep === totalSteps ? 'none' : 'inline-flex';
+            nextBtn.style.display = currentStep === totalSteps ? 'none' : 'inline-flex';
+        };
+
+        const validateStep = () => {
+            const currentStepEl = wizard.querySelector(`.step[data-step="${currentStep}"]`);
+            const inputs = currentStepEl.querySelectorAll('input[required], textarea[required]');
+            for (const input of inputs) {
+                if (!input.value.trim()) {
+                    input.focus();
+                    // Using a more subtle notification could be an improvement, but alert is robust
+                    alert('Veuillez remplir tous les champs obligatoires.');
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        const saveStepData = () => {
+            const currentStepEl = wizard.querySelector(`.step[data-step="${currentStep}"]`);
+            const inputs = currentStepEl.querySelectorAll('input, textarea');
+            inputs.forEach(input => {
+                legalData[input.id.replace(/-/g, '_')] = input.value;
+            });
+        };
+
+        nextBtn.addEventListener('click', () => {
+            if (!validateStep()) return;
+            saveStepData();
+            if (currentStep < totalSteps) {
+                currentStep++;
+                updateUI();
+            }
+        });
+
+        prevBtn.addEventListener('click', () => {
+            if (currentStep > 1) {
+                currentStep--;
+                updateUI();
+            }
+        });
+
+        const setLoading = (btn, isLoading) => {
+            btn.disabled = isLoading;
+            btn.classList.toggle('loading', isLoading);
+        };
+
+        exportHtmlBtn.addEventListener('click', async () => {
+            setLoading(exportHtmlBtn, true);
+            statusEl.textContent = 'Création de l\'archive HTML...';
+            try {
+                const zip = new JSZip();
+                const pages = generatePages();
+
+                zip.file('mentions-legales.html', pages.mentionsLegales);
+                zip.file('conditions-generales-de-vente.html', pages.cgv);
+                zip.file('politique-de-confidentialite.html', pages.confidentialite);
+                zip.file('politique-de-remboursement.html', pages.remboursement);
+
+                const content = await zip.generateAsync({ type: 'blob' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(content);
+                link.download = 'pages-legales-html.zip';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                statusEl.textContent = 'Archive HTML générée !';
+            } catch (error) {
+                console.error("HTML Export Error:", error);
+                statusEl.textContent = 'Erreur lors de la création de l\'archive HTML.';
+            } finally {
+                setLoading(exportHtmlBtn, false);
+            }
+        });
+
+        exportPdfBtn.addEventListener('click', async () => {
+            setLoading(exportPdfBtn, true);
+            statusEl.textContent = 'Génération des PDF et création de l\'archive...';
+            try {
+                const zip = new JSZip();
+                const { jsPDF } = window.jspdf;
+                const pageConfigs = [
+                    { name: 'mentions-legales', title: 'Mentions Légales' },
+                    { name: 'conditions-generales-de-vente', title: 'Conditions Générales de Vente' },
+                    { name: 'politique-de-confidentialite', title: 'Politique de Confidentialité' },
+                    { name: 'politique-de-remboursement', title: 'Politique de Remboursement' }
+                ];
+
+                for (const config of pageConfigs) {
+                    const textContent = getPageTextContent(config.name);
+                    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+                    const pageW = doc.internal.pageSize.getWidth();
+                    const margin = 20;
+                    let y = margin;
+                    
+                    const writeText = (text, options = {}) => {
+                      if (y > doc.internal.pageSize.getHeight() - margin) {
+                        doc.addPage();
+                        y = margin;
+                      }
+                      doc.setFont(options.font || 'helvetica', options.style || 'normal');
+                      doc.setFontSize(options.size || 11);
+                      doc.setTextColor(options.color || '#141417');
+                      const lines = doc.splitTextToSize(text, pageW - margin * 2);
+                      doc.text(lines, margin, y);
+                      y += (doc.getTextDimensions(lines).h) + (options.spacing || 6);
+                    };
+                    
+                    writeText(config.title, {size: 18, style: 'bold', spacing: 12});
+                    
+                    textContent.forEach(section => {
+                       writeText(section.title, {size: 14, style: 'bold', spacing: 8});
+                       writeText(section.content, {size: 11, spacing: 10});
+                    });
+                    
+                    zip.file(`${config.name}.pdf`, await doc.output('blob'));
+                }
+                
+                const content = await zip.generateAsync({ type: 'blob' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(content);
+                link.download = 'pages-legales-pdf.zip';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                statusEl.textContent = 'Archive PDF générée !';
+
+            } catch(error) {
+                console.error("PDF Export Error:", error);
+                statusEl.textContent = 'Erreur lors de la création de l\'archive PDF.';
+            } finally {
+                setLoading(exportPdfBtn, false);
+            }
+        });
+
+        const d = () => legalData;
+        const today = new Date().toLocaleDateString('fr-FR');
+
+        const generatePages = () => {
+            const pageStyle = `<style>body{font-family:sans-serif;line-height:1.6;padding:2em;max-width:800px;margin:auto;}h1{color:#7C3AED}h2{border-bottom:1px solid #eee;padding-bottom:0.5em}</style>`;
+            
+            const mentionsLegales = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Mentions Légales</title>${pageStyle}</head><body><h1>Mentions Légales</h1><p>En vigueur au ${today}</p><h2>1. Éditeur du site</h2><p>Nom de l'entreprise : ${d().company_name}<br>Adresse : ${d().company_address}<br>Email : ${d().contact_email}<br>Numéro d'immatriculation : ${d().company_registration}</p><h2>2. Directeur de la publication</h2><p>Le directeur de la publication est ${d().publication_director}.</p><h2>3. Hébergement</h2><p>Le site ${d().website_url} est hébergé par :<br>Hébergeur : ${d().host_name}<br>Adresse : ${d().host_address}</p><h2>4. Accès au site</h2><p>Le site est accessible en tout endroit, 7j/7, 24h/24 sauf cas de force majeure, interruption programmée ou non et pouvant découler d’une nécessité de maintenance.</p><script type="module" src="/index.tsx"></script>
+</body></html>`;
+            const cgv = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Conditions Générales de Vente</title>${pageStyle}</head><body><h1>Conditions Générales de Vente</h1><p>En vigueur au ${today}</p><h2>Article 1 - Prix</h2><p>Les prix de nos produits sont indiqués en euros toutes taxes comprises (TVA et autres taxes applicables au jour de la commande), sauf indication contraire et hors frais de traitement et d'expédition.</p><h2>Article 2 - Commandes</h2><p>Vous pouvez passer commande sur notre site Internet ${d().website_url}.</p><h2>Article 3 - Paiement</h2><p>Le fait de valider votre commande implique pour vous l'obligation de payer le prix indiqué. Les moyens de paiement acceptés sont : ${d().payment_methods}.</p><h2>Article 4 - Rétractation</h2><p>Conformément aux dispositions de l'article L.121-21 du Code de la Consommation, vous disposez d'un délai de rétractation de ${d().return_period} jours à compter de la réception de vos produits pour exercer votre droit de rétraction sans avoir à justifier de motifs ni à payer de pénalité.</p><h2>Article 5 - Livraison</h2><p>Les produits sont livrés à l'adresse de livraison indiquée au cours du processus de commande, dans un délai de ${d().shipping_time}.</p></body></html>`;
+            const confidentialite = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Politique de Confidentialité</title>${pageStyle}</head><body><h1>Politique de Confidentialité</h1><p>En vigueur au ${today}</p><h2>1. Collecte des données personnelles</h2><p>Les données à caractère personnel qui sont collectées sur ce site sont les suivantes : ${d().data_collected}</p><h2>2. Utilisation des données personnelles</h2><p>Les données personnelles collectées auprès des utilisateurs ont pour objectif la mise à disposition des services du site web, leur amélioration et le maintien d'un environnement sécurisé.</p><h2>3. Partage des données personnelles avec des tiers</h2><p>Les données personnelles peuvent être partagées avec des sociétés tierces, dans les cas suivants : quand l'utilisateur utilise les services de paiement, pour la mise en œuvre de ces services, le site web est en relation avec des sociétés bancaires et financières tierces avec lesquelles elle a passé des contrats.</p><h2>4. Sécurité et confidentialité</h2><p>Le site web met en œuvre des mesures organisationnelles, techniques, logicielles et physiques en matière de sécurité du numérique pour protéger les données personnelles contre les altérations, destructions et accès non autorisés.</p><h2>5. Droit des utilisateurs</h2><p>En application de la réglementation applicable aux données à caractère personnel, les utilisateurs disposent des droits suivants, qu'ils peuvent exercer en faisant leur demande à l'adresse suivante : ${d().contact_email}.</p></body></html>`;
+            const remboursement = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Politique de Remboursement</title>${pageStyle}</head><body><h1>Politique de Remboursement</h1><p>En vigueur au ${today}</p><h2>Droit de rétractation</h2><p>Vous avez le droit de vous rétracter du présent contrat sans donner de motif dans un délai de ${d().return_period} jours.</p><p>Le délai de rétractation expire ${d().return_period} jours après le jour où vous-même, ou un tiers autre que le transporteur et désigné par vous, prend physiquement possession du bien.</p><h2>Effets de la rétractation</h2><p>En cas de rétractation de votre part du présent contrat, nous vous rembourserons tous les paiements reçus de vous, y compris les frais de livraison (à l'exception des frais supplémentaires découlant du fait que vous avez choisi, le cas échéant, un mode de livraison autre que le mode moins coûteux de livraison standard proposé par nous) sans retard excessif et, en tout état de cause, au plus tard quatorze jours à compter du jour où nous sommes informés de votre décision de rétractation du présent contrat.</p><h2>Conditions de retour</h2><p>Les produits doivent être retournés dans leur état d'origine et complets (emballage, accessoires, notice...). Dans ce cadre, votre responsabilité est engagée. Tout dommage subi par le produit à cette occasion peut être de nature à faire échec au droit de rétractation. Les frais de retour sont à votre charge.</p></body></html>`;
+            return { mentionsLegales, cgv, confidentialite, remboursement };
+        };
+
+        const getPageTextContent = (page) => {
+            switch(page) {
+                case 'mentions-legales': return [{ title: "1. Éditeur du site", content: `Nom de l'entreprise : ${d().company_name}\nAdresse : ${d().company_address}\nEmail : ${d().contact_email}\nNuméro d'immatriculation : ${d().company_registration}` },{ title: "2. Directeur de la publication", content: `Le directeur de la publication est ${d().publication_director}.` },{ title: "3. Hébergement", content: `Le site ${d().website_url} est hébergé par :\nHébergeur : ${d().host_name}\nAdresse : ${d().host_address}` },{ title: "4. Accès au site", content: `Le site est accessible en tout endroit, 7j/7, 24h/24 sauf cas de force majeure, interruption programmée ou non et pouvant découler d’une nécessité de maintenance.` }];
+                case 'conditions-generales-de-vente': return [{ title: "Article 1 - Prix", content: "Les prix de nos produits sont indiqués en euros toutes taxes comprises (TVA et autres taxes applicables au jour de la commande), sauf indication contraire et hors frais de traitement et d'expédition." },{ title: "Article 2 - Commandes", content: `Vous pouvez passer commande sur notre site Internet ${d().website_url}.` },{ title: "Article 3 - Paiement", content: `Le fait de valider votre commande implique pour vous l'obligation de payer le prix indiqué. Les moyens de paiement acceptés sont : ${d().payment_methods}.` },{ title: "Article 4 - Rétractation", content: `Conformément aux dispositions de l'article L.121-21 du Code de la Consommation, vous disposez d'un délai de rétractation de ${d().return_period} jours à compter de la réception de vos produits pour exercer votre droit de rétraction sans avoir à justifier de motifs ni à payer de pénalité.` },{ title: "Article 5 - Livraison", content: `Les produits sont livrés à l'adresse de livraison indiquée au cours du processus de commande, dans un délai de ${d().shipping_time}.` }];
+                case 'politique-de-confidentialite': return [{ title: "1. Collecte des données personnelles", content: `Les données à caractère personnel qui sont collectées sur ce site sont les suivantes : ${d().data_collected}` },{ title: "2. Utilisation des données personnelles", content: `Les données personnelles collectées auprès des utilisateurs ont pour objectif la mise à disposition des services du site web, leur amélioration et le maintien d'un environnement sécurisé.` },{ title: "3. Partage des données personnelles avec des tiers", content: "Les données personnelles peuvent être partagées avec des sociétés tierces, dans les cas suivants : quand l'utilisateur utilise les services de paiement, pour la mise en œuvre de ces services, le site web est en relation avec des sociétés bancaires et financières tierces avec lesquelles elle a passé des contrats." },{ title: "4. Sécurité et confidentialité", content: `Le site web met en œuvre des mesures organisationnelles, techniques, logicielles et physiques en matière de sécurité du numérique pour protéger les données personnelles contre les altérations, destructions et accès non autorisés.` },{ title: "5. Droit des utilisateurs", content: `En application de la réglementation applicable aux données à caractère personnel, les utilisateurs disposent des droits suivants, qu'ils peuvent exercer en faisant leur demande à l'adresse suivante : ${d().contact_email}.` }];
+                case 'politique-de-remboursement': return [{ title: "Droit de rétractation", content: `Vous avez le droit de vous rétracter du présent contrat sans donner de motif dans un délai de ${d().return_period} jours.\nLe délai de rétractation expire ${d().return_period} jours après le jour où vous-même, ou un tiers autre que le transporteur et désigné par vous, prend physiquement possession du bien.` },{ title: "Effets de la rétractation", content: "En cas de rétractation de votre part du présent contrat, nous vous rembourserons tous les paiements reçus de vous, y compris les frais de livraison (à l'exception des frais supplémentaires découlant du fait que vous avez choisi, le cas échéant, un mode de livraison autre que le mode moins coûteux de livraison standard proposé par nous) sans retard excessif et, en tout état de cause, au plus tard quatorze jours à compter du jour où nous sommes informés de votre décision de rétractation du présent contrat." },{ title: "Conditions de retour", content: "Les produits doivent être retournés dans leur état d'origine et complets (emballage, accessoires, notice...). Dans ce cadre, votre responsabilité est engagée. Tout dommage subi par le produit à cette occasion peut être de nature à faire échec au droit de rétractation. Les frais de retour sont à votre charge." }];
+                default: return [];
+            }
+        }
+
+        updateUI();
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      try {
+        runApp();
+      } catch (error) {
+        console.error("Erreur critique lors de l'initialisation de l'application:", error);
+        const wizardContainer = document.getElementById('legal-wizard');
+        if (wizardContainer) {
+            wizardContainer.innerHTML = `
+                <div class="error-display">
+                    <h2>Oups, une erreur est survenue</h2>
+                    <p>${error.message || "L'application n'a pas pu démarrer. Veuillez rafraîchir la page ou vérifier la console."}</p>
+                </div>`;
+        }
+      }
+    });
+  </script>
+</body>
+</html>
