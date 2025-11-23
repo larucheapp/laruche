@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Créateur d'Animation Texte — La Ruche</title>
+  <meta name="description" content="Créez des animations textuelles percutantes (slogans, titres) et exportez-les en vidéo MP4. Le tout, 100% dans votre navigateur.">
+  
+  <style>
+    :root {
+      --color-bg: #FFFFFF;
+      --color-bg-alt: #F7F8FA;
+      --color-border: #E9EAF0;
+      --color-text-primary: #141417;
+      --color-text-secondary: #6B7280;
+      --color-violet: #7C3AED;
+      --color-violet-dark: #6D28D9;
+      --radius-md: 12px;
+      --radius-lg: 14px;
+      --tool-max-w: 480px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; background-color: var(--color-bg); }
+    body {
+      height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--color-text-primary); line-height: 1.5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    body[data-size="default"] { --tool-max-w: 480px; }
+    body[data-size="wide"] { --tool-max-w: 1024px; }
+    body[data-size="xl"] { --tool-max-w: 1200px; }
+
+    #bg-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; }
+
+    .app-header {
+      flex-shrink: 0; background: var(--color-bg-alt); border-bottom: 1px solid var(--color-border);
+      padding: 0 24px; display: flex; align-items: center; height: 70px;
+    }
+    .app-header a { display: inline-flex; align-items: center; }
+    .logo-img { height: 70px; width: auto; vertical-align: middle; }
+
+    .main-content {
+      flex-grow: 1; display: flex; justify-content: center;
+      padding: 48px 24px; overflow-y: auto;
+    }
+    .tool-wrapper { display: flex; flex-direction: column; align-items: center; position: relative; width: 100%; max-width: var(--tool-max-w); }
+    .tool-title {
+      font-size: 1.75rem; font-weight: 600; padding: 12px 28px;
+      background: linear-gradient(45deg, var(--color-violet), var(--color-violet-dark));
+      color: #fff; border-radius: var(--radius-md); margin-bottom: -20px; position: relative; z-index: 5;
+      box-shadow: 0 4px 14px -4px rgba(124, 58, 237, .4);
+      text-align: center;
+    }
+    .generator-grid {
+      display: grid;
+      grid-template-columns: 400px 1fr;
+      gap: 24px;
+      width: 100%;
+      padding-top: 40px;
+    }
+    .generator-card {
+      background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+      padding: 28px;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display: flex; flex-direction: column; gap: 24px;
+      position: relative;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-label { font-weight: 500; color: var(--color-text-primary); }
+    .form-input, .form-select, .form-textarea {
+      width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+      font-size: 1rem; color: var(--color-text-primary); background: var(--color-bg);
+      transition: border-color .2s, box-shadow .2s; font-family: inherit;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: var(--color-violet); box-shadow: 0 0 0 3px rgba(124, 58, 237, .2); }
+    .form-textarea { resize: vertical; min-height: 100px; }
+    .form-group-inline { display: flex; align-items: center; gap: 16px; }
+    .form-group-inline > .form-group { flex: 1; }
+    
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      font-weight: 500; padding: 12px 18px; border-radius: var(--radius-md); border: none; cursor: pointer;
+      transition: background-color .2s, box-shadow .2s, opacity .2s, color .2s, border-color .2s; font-size: 1rem;
+    }
+    .btn:focus-visible { outline: 2px solid transparent; outline-offset: 2px; box-shadow: 0 0 0 3px rgba(124, 58, 237, .4); }
+    .btn-primary { background: var(--color-violet); color: #fff; width: 100%; }
+    .btn-primary:hover:not(:disabled) { background: var(--color-violet-dark); }
+    .btn-primary:disabled { background: #A78BFA; cursor: not-allowed; opacity: .7; }
+    
+    .actions { display: flex; gap: 12px; margin-top: auto; }
+    
+    .style-selector { display: flex; gap: 10px; }
+    .btn-style-select {
+        flex: 1;
+        background: var(--color-bg);
+        color: var(--color-violet);
+        border: 1px solid var(--color-border);
+        font-weight: 500;
+        font-size: 14px;
+        padding: 10px;
+    }
+    .btn-style-select:hover:not(.active) {
+        border-color: var(--color-violet);
+        background: rgba(124, 58, 237, .05);
+    }
+    .btn-style-select.active {
+        background: var(--color-violet);
+        color: #fff;
+        border-color: var(--color-violet);
+        box-shadow: 0 2px 8px -2px rgba(124,58,237,.4);
+    }
+
+    #preview-card { padding: 0; overflow: hidden; }
+    #preview-area {
+        width: 100%;
+        height: 100%;
+        min-height: 400px;
+        background-color: #141417;
+        position: relative;
+    }
+    #preview-canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+    }
+
+    .loading-overlay {
+        position: absolute; inset: 0; background-color: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(4px); display: flex; flex-direction: column; align-items: center; justify-content: center;
+        z-index: 10; border-radius: var(--radius-lg); transition: opacity .3s ease, visibility .3s ease;
+        opacity: 0; visibility: hidden; text-align: center;
+    }
+    .loading-overlay.visible { opacity: 1; visibility: visible; }
+    .loader-icon-large {
+        width: 48px; height: 48px; border: 4px solid rgba(124, 58, 237, 0.2);
+        border-top-color: var(--color-violet); border-radius: 50%; animation: spin 1s linear infinite;
+    }
+    #export-status { margin-top: 16px; font-weight: 500; color: var(--color-text-secondary); }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="wide">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Créateur d'Animation Texte</h1>
+      
+      <div class="generator-grid">
+        <!-- CONTROLS CARD -->
+        <div class="generator-card" role="region" aria-label="Contrôles de l'animation">
+          <div class="form-group">
+            <label class="form-label">Style d'animation</label>
+            <div class="style-selector" id="style-selector">
+                <button class="btn btn-style-select active" data-value="fade-in" title="Apparition en fondu">Fondu</button>
+                <button class="btn btn-style-select" data-value="slide-up" title="Glissement vers le haut">Glissement</button>
+                <button class="btn btn-style-select" data-value="typewriter" title="Effet machine à écrire">Écriture</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="anim-text" class="form-label">Texte à animer</label>
+            <textarea id="anim-text" class="form-textarea">Votre Titre Animé</textarea>
+          </div>
+          
+          <div class="form-group-inline">
+            <div class="form-group">
+              <label for="anim-size" class="form-label">Taille (px)</label>
+              <input type="number" id="anim-size" class="form-input" value="48" min="10" max="150">
+            </div>
+            <div class="form-group">
+              <label for="anim-color" class="form-label">Couleur</label>
+              <input type="color" id="anim-color" class="form-input" value="#FFFFFF" style="padding: 5px;">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="anim-duration" class="form-label">Durée (secondes)</label>
+            <input type="number" id="anim-duration" class="form-input" value="2" min="0.5" max="10" step="0.1">
+          </div>
+
+          <div class="actions">
+            <button id="preview-btn" class="btn btn-primary" style="flex:1;">Prévisualiser</button>
+            <button id="export-btn" class="btn btn-primary" style="flex:2;">Exporter en WebM</button>
+          </div>
+          
+           <div class="loading-overlay" id="loading-overlay">
+              <div class="loader-icon-large"></div>
+              <p id="export-status">Préparation de l'exportation...</p>
+           </div>
+        </div>
+
+        <!-- PREVIEW CARD -->
+        <div class="generator-card" id="preview-card" role="region" aria-label="Prévisualisation de l'animation">
+          <div id="preview-area">
+            <canvas id="preview-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // --- SETUP ---
+    const controls = {
+        text: document.getElementById('anim-text'),
+        size: document.getElementById('anim-size'),
+        color: document.getElementById('anim-color'),
+        duration: document.getElementById('anim-duration'),
+    };
+    const styleSelector = document.getElementById('style-selector');
+    const previewBtn = document.getElementById('preview-btn');
+    const exportBtn = document.getElementById('export-btn');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const exportStatus = document.getElementById('export-status');
+    const previewArea = document.getElementById('preview-area');
+    const previewCanvas = document.getElementById('preview-canvas');
+    const ctx = previewCanvas.getContext('2d');
+
+    let currentAnimStyle = 'fade-in';
+    let animationFrameId = null;
+
+    // --- CANVAS & ANIMATION LOGIC ---
+
+    function resizeCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = previewCanvas.getBoundingClientRect();
+        previewCanvas.width = rect.width * dpr;
+        previewCanvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+    }
+
+    function drawStaticFrame() {
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+        requestAnimationFrame(() => {
+            const rect = previewCanvas.getBoundingClientRect();
+            ctx.fillStyle = '#141417';
+            ctx.fillRect(0, 0, rect.width, rect.height);
+            
+            ctx.font = `bold ${controls.size.value}px -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = controls.color.value;
+
+            ctx.fillText(controls.text.value, rect.width / 2, rect.height / 2);
+        });
+    }
+
+    function playAnimation(isExporting = false) {
+        return new Promise(resolve => {
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            
+            const text = controls.text.value;
+            const size = parseInt(controls.size.value, 10);
+            const color = controls.color.value;
+            const duration = parseFloat(controls.duration.value) * 1000;
+            const animType = currentAnimStyle;
+            const startTime = performance.now();
+
+            function draw(currentTime) {
+                const elapsedTime = currentTime - startTime;
+                const progress = Math.min(elapsedTime / duration, 1);
+                
+                const rect = previewCanvas.getBoundingClientRect();
+                
+                if (isExporting) {
+                    ctx.clearRect(0, 0, rect.width, rect.height);
+                } else {
+                    ctx.fillStyle = '#141417';
+                    ctx.fillRect(0, 0, rect.width, rect.height);
+                }
+                
+                ctx.font = `bold ${size}px -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, sans-serif`;
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = color;
+                
+                const x = rect.width / 2;
+                const y = rect.height / 2;
+
+                ctx.textAlign = 'center';
+                if (animType === 'fade-in') {
+                    ctx.globalAlpha = progress;
+                    ctx.fillText(text, x, y);
+                    ctx.globalAlpha = 1;
+                } else if (animType === 'slide-up') {
+                    const startY = y + 50;
+                    const currentY = startY - (50 * progress);
+                    ctx.globalAlpha = progress;
+                    ctx.fillText(text, x, currentY);
+                    ctx.globalAlpha = 1;
+                } else if (animType === 'typewriter') {
+                    ctx.textAlign = 'left';
+                    const fullWidth = ctx.measureText(text).width;
+                    const startX = x - fullWidth / 2;
+                    
+                    const charCount = Math.floor(text.length * progress);
+                    const partialText = text.substring(0, charCount);
+                    ctx.fillText(partialText, startX, y);
+
+                    if (progress < 1) {
+                        const showCaret = Math.floor(elapsedTime / 500) % 2 === 0;
+                        if (showCaret) {
+                            const partialWidth = ctx.measureText(partialText).width;
+                            ctx.fillRect(startX + partialWidth + 2, y - size / 2, 4, size);
+                        }
+                    }
+                }
+
+                if (progress < 1) {
+                    animationFrameId = requestAnimationFrame(draw);
+                } else {
+                     // Animation is complete. Draw one final, clean frame for all anim types.
+                    requestAnimationFrame(() => {
+                        if (isExporting) {
+                            ctx.clearRect(0, 0, rect.width, rect.height);
+                        } else {
+                            ctx.fillStyle = '#141417';
+                            ctx.fillRect(0, 0, rect.width, rect.height);
+                        }
+                        ctx.textAlign = 'center';
+                        ctx.font = `bold ${size}px -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, sans-serif`;
+                        ctx.fillStyle = color;
+                        ctx.fillText(text, x, y);
+                        resolve(); // Signal that the animation is truly finished.
+                    });
+                }
+            }
+            
+            animationFrameId = requestAnimationFrame(draw);
+        });
+    }
+    
+    async function handleExport() {
+        exportBtn.disabled = true;
+        previewBtn.disabled = true;
+        loadingOverlay.classList.add('visible');
+
+        try {
+            const frameRate = 30;
+            const mimeType = 'video/webm;codecs=vp9';
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+              alert(`Le format ${mimeType} (requis pour la transparence) n'est pas supporté par votre navigateur.`);
+              throw new Error(`Unsupported MIME type for transparency: ${mimeType}`);
+            }
+
+            exportStatus.textContent = 'Enregistrement...';
+            const stream = previewCanvas.captureStream(frameRate);
+            const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2500000 });
+            const chunks = [];
+            recorder.ondataavailable = e => chunks.push(e.data);
+
+            const exportPromise = new Promise((resolve, reject) => {
+                recorder.onstop = () => {
+                    resolve(new Blob(chunks, { type: 'video/webm' }));
+                };
+                recorder.onerror = reject;
+            });
+            
+            recorder.start();
+            await playAnimation(true); // Wait for the animation to explicitly finish
+            recorder.stop();
+
+            const videoBlob = await exportPromise;
+
+            exportStatus.textContent = 'Finalisation...';
+            const url = URL.createObjectURL(videoBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            const safeFilename = controls.text.value.substring(0, 20).replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            a.download = `laruche_animation_${safeFilename || 'video'}.webm`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.error('Exportation échouée:', error);
+            exportStatus.textContent = "Erreur lors de l'exportation.";
+            alert("Une erreur s'est produite. Vérifiez la console pour plus de détails.");
+        } finally {
+            exportBtn.disabled = false;
+            previewBtn.disabled = false;
+            loadingOverlay.classList.remove('visible');
+            exportStatus.textContent = "Préparation de l'exportation...";
+            // Redraw the preview with its solid background
+            drawStaticFrame();
+        }
+    }
+
+    // --- EVENT LISTENERS ---
+    Object.values(controls).forEach(input => input.addEventListener('input', drawStaticFrame));
+
+    styleSelector.addEventListener('click', (e) => {
+        const targetButton = e.target.closest('.btn-style-select');
+        if (!targetButton || targetButton.classList.contains('active')) return;
+        styleSelector.querySelector('.btn.active').classList.remove('active');
+        targetButton.classList.add('active');
+        currentAnimStyle = targetButton.dataset.value;
+        playAnimation();
+    });
+
+    previewBtn.addEventListener('click', () => playAnimation());
+    exportBtn.addEventListener('click', handleExport);
+
+    const resizeObserver = new ResizeObserver(() => {
+        resizeCanvas();
+        drawStaticFrame();
+    });
+    resizeObserver.observe(previewArea);
+    
+    // --- INITIALIZATION ---
+    setTimeout(() => {
+        resizeCanvas();
+        playAnimation();
+    }, 100);
+
+
+    // --- BACKGROUND SCRIPT ---
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+        const size = 24; const hexW = 2 * size; const hexH = Math.sqrt(3) * size; const stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)'; ctx.lineWidth = 1;
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX; const y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i; const px = x + size * Math.cos(a); const py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

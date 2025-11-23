@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Créateur de Page Web — La Ruche</title>
+  <meta name="description" content="Créez votre page de liens personnalisée en quelques minutes. Choisissez un modèle, ajoutez vos contenus et exportez un fichier HTML prêt à l'emploi.">
+  
+  <style>
+    :root {
+      --color-bg: #FFFFFF;
+      --color-bg-alt: #F7F8FA;
+      --color-border: #E9EAF0;
+      --color-text-primary: #141417;
+      --color-text-secondary: #6B7280;
+      --color-violet: #7C3AED;
+      --color-violet-dark: #6D28D9;
+      --radius-md: 12px;
+      --radius-lg: 14px;
+      --tool-max-w: 480px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; background-color: var(--color-bg); }
+    body {
+      height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--color-text-primary); line-height: 1.5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    body[data-size="default"] { --tool-max-w: 480px; }
+    body[data-size="wide"] { --tool-max-w: 960px; }
+    body[data-size="xl"] { --tool-max-w: 1200px; }
+
+    #bg-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; }
+
+    .app-header {
+      flex-shrink: 0; background: var(--color-bg-alt); border-bottom: 1px solid var(--color-border);
+      padding: 0 24px; display: flex; align-items: center; height: 70px;
+    }
+    .app-header a { display: inline-flex; align-items: center; }
+    .logo-img { height: 70px; width: auto; vertical-align: middle; }
+
+    .main-content {
+      flex-grow: 1; display: flex; justify-content: center;
+      padding: 48px 24px; overflow-y: auto;
+    }
+    .tool-wrapper { display: flex; flex-direction: column; align-items: center; position: relative; width: 100%; max-width: var(--tool-max-w); }
+    .tool-title {
+      font-size: 1.75rem; font-weight: 600; padding: 12px 28px;
+      background: linear-gradient(45deg, var(--color-violet), var(--color-violet-dark));
+      color: #fff; border-radius: var(--radius-md); margin-bottom: -20px; position: relative; z-index: 5;
+      text-align: center;
+    }
+    .generator-card {
+      background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+      padding: 28px;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display: flex; flex-direction: column; gap: 24px;
+      position: relative;
+    }
+    
+    /* --- App Specific Styles --- */
+    .view { width: 100%; }
+    #editor-view { display: none; }
+    
+    /* Template Selection */
+    .template-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 20px;
+        padding-top: 40px;
+        width: 100%;
+    }
+    .template-card {
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        cursor: pointer;
+        transition: transform .2s ease, box-shadow .2s ease;
+        background: var(--color-bg);
+    }
+    .template-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 15px -4px rgb(0 0 0 / 7%);
+        border-color: var(--color-violet);
+    }
+    .template-preview-img {
+        width: 100%;
+        display: block;
+        background-color: var(--color-bg-alt);
+        border-bottom: 1px solid var(--color-border);
+        aspect-ratio: 9 / 16;
+    }
+    .template-name {
+        padding: 12px;
+        font-weight: 500;
+        font-size: 15px;
+        text-align: center;
+        color: var(--color-text-primary);
+    }
+    
+    /* Editor */
+    .editor-grid {
+      display: grid;
+      grid-template-columns: 400px 1fr;
+      gap: 24px;
+      width: 100%;
+      padding-top: 40px;
+    }
+    #form-card { max-height: calc(100vh - 200px); overflow-y: auto; padding:20px; }
+    #preview-card { 
+        padding: 0;
+        overflow: hidden; 
+        background-color: var(--color-bg-alt);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    #preview-frame {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      border-radius: var(--radius-lg);
+      transform-origin: top center;
+      background-color: #fff;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-label { font-weight: 500; color: var(--color-text-primary); font-size: 14px; }
+    .form-input, .form-textarea {
+      width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+      font-size: 1rem; color: var(--color-text-primary); background: var(--color-bg);
+      transition: border-color .2s, box-shadow .2s; font-family: inherit;
+    }
+    .form-input[type="file"] { padding: 8px; }
+    .form-input:focus, .form-textarea:focus { outline: none; border-color: var(--color-violet); box-shadow: 0 0 0 3px rgba(124, 58, 237, .2); }
+    .form-textarea { resize: vertical; min-height: 80px; }
+    
+    fieldset { border: none; padding: 0; display: flex; flex-direction: column; gap: 16px; }
+    legend { font-size: 1.1rem; font-weight: 600; margin-bottom: 16px; padding-top: 16px; border-top: 1px solid var(--color-border); width: 100%; }
+    
+    .link-item { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 16px; position: relative; display:flex; flex-direction:column; gap: 12px; }
+    
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      font-weight: 500; padding: 10px 16px; border-radius: var(--radius-md); border: none; cursor: pointer;
+      transition: background-color .2s, box-shadow .2s; font-size: 14px;
+    }
+    .btn:focus-visible { outline: 2px solid transparent; outline-offset: 2px; box-shadow: 0 0 0 3px rgba(124, 58, 237, .4); }
+    .btn-primary { background: var(--color-violet); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--color-violet-dark); }
+    .btn-primary:disabled { background: #A78BFA; cursor: not-allowed; }
+    .btn-secondary { background: var(--color-bg-alt); color: var(--color-text-secondary); border: 1px solid var(--color-border); }
+    .btn-secondary:hover { background: #F0F1F3; }
+    .btn-danger { position: absolute; top: -10px; right: -10px; background: #FEE2E2; color: #DC2626; border-radius: 50%; width: 24px; height: 24px; padding: 0; font-size: 16px; line-height: 1; }
+    .btn-danger:hover { background: #FECACA; }
+    .actions { display: flex; gap: 12px; margin-top: 16px; }
+
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="wide">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      
+      <!-- VIEW 1: TEMPLATE SELECTION -->
+      <div id="selection-view" class="view">
+        <h1 class="tool-title">Choisissez un modèle de page</h1>
+        <div id="template-grid" class="template-grid">
+            <!-- Templates will be injected here by JS -->
+        </div>
+      </div>
+
+      <!-- VIEW 2: EDITOR -->
+      <div id="editor-view" class="view">
+        <h1 class="tool-title">Personnalisez votre page</h1>
+        <div class="editor-grid">
+            
+            <!-- CONTROLS CARD -->
+            <div class="generator-card" id="form-card" role="region" aria-label="Formulaire de personnalisation">
+              <div class="actions">
+                  <button id="back-btn" class="btn btn-secondary">Changer de modèle</button>
+                  <button id="export-btn" class="btn btn-primary" style="flex:1;">Exporter en ZIP</button>
+              </div>
+              
+              <form id="site-form">
+                <fieldset>
+                  <legend>Profil</legend>
+                  <div class="form-group">
+                      <label for="photo" class="form-label">Votre photo</label>
+                      <input type="file" id="photo" class="form-input" accept="image/*">
+                  </div>
+                  <div class="form-group">
+                      <label for="name" class="form-label">Nom ou @pseudo</label>
+                      <input type="text" id="name" data-site="profile.name" class="form-input">
+                  </div>
+                  <div class="form-group">
+                      <label for="bio" class="form-label">Bio (courte description)</label>
+                      <textarea id="bio" data-site="profile.bio" class="form-textarea"></textarea>
+                  </div>
+                </fieldset>
+
+                <fieldset>
+                  <legend>Liens</legend>
+                  <div id="links-container"></div>
+                  <button type="button" id="add-link-btn" class="btn btn-secondary">Ajouter un lien</button>
+                </fieldset>
+              </form>
+            </div>
+
+            <!-- PREVIEW CARD -->
+            <div class="generator-card" id="preview-card" role="region" aria-label="Aperçu de la page">
+                <iframe id="preview-frame" title="Aperçu en direct"></iframe>
+            </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script>
+    // --- TEMPLATES ---
+    const templates = {
+        'minimalist-dark': {
+            name: 'Minimaliste Sombre',
+            preview: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 90 160' style='background:%23121212'%3E%3Ccircle cx='45' cy='30' r='15' fill='%23333'/%3E%3Crect x='25' y='50' width='40' height='4' fill='%23eee'/%3E%3Crect x='15' y='70' width='60' height='10' rx='5' fill='%23222'/%3E%3Crect x='15' y='85' width='60' height='10' rx='5' fill='%23222'/%3E%3Crect x='15' y='100' width='60' height='10' rx='5' fill='%23222'/%3E%3C/svg%3E`,
+            render: (data, imagePath = null) => {
+                const imgSrc = imagePath || data.profile.photo;
+                return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${data.profile.name}</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #121212; color: #E0E0E0; display: flex; justify-content: center; padding: 40px 20px; margin:0; }
+        .container { max-width: 680px; width: 100%; text-align: center; }
+        .profile-pic { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; margin-bottom: 20px; background-color: #333; }
+        h1 { font-size: 1.5rem; margin: 0 0 10px; }
+        p { margin: 0 0 30px; }
+        a.link-card { background-color: #1E1E1E; color: #E0E0E0; display: block; padding: 18px; margin-bottom: 16px; border-radius: 8px; text-decoration: none; font-weight: 500; transition: transform 0.2s; }
+        a.link-card:hover { transform: scale(1.03); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="${imgSrc}" alt="Photo de profil" class="profile-pic">
+        <h1>${data.profile.name}</h1>
+        <p>${data.profile.bio}</p>
+        <div>
+            ${data.links.map(link => `<a href="${link.url}" class="link-card" target="_blank" rel="noopener noreferrer">${link.title}</a>`).join('')}
+        </div>
+    </div>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>`}
+        },
+        'gradient-sky': {
+            name: 'Ciel Dégradé',
+            preview: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 90 160'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0%25' stop-color='%2389f7fe'/%3E%3Cstop offset='100%25' stop-color='%2366a6ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='90' height='160' fill='url(%23g)'/%3E%3Ccircle cx='45' cy='30' r='15' fill='rgba(255,255,255,0.8)'/%3E%3Crect x='25' y='50' width='40' height='4' fill='%23333'/%3E%3Crect x='15' y='70' width='60' height='10' rx='5' fill='rgba(255,255,255,0.7)'/%3E%3Crect x='15' y='85' width='60' height='10' rx='5' fill='rgba(255,255,255,0.7)'/%3E%3C/svg%3E`,
+            render: (data, imagePath = null) => {
+                const imgSrc = imagePath || data.profile.photo;
+                return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${data.profile.name}</title>
+    <style>
+        body { font-family: "Poppins", sans-serif; background: linear-gradient(to bottom, #89f7fe, #66a6ff); color: #212121; display: flex; justify-content: center; padding: 40px 20px; min-height: 100vh; box-sizing: border-box; margin:0;}
+        .container { max-width: 680px; width: 100%; text-align: center; }
+        .profile-pic { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; margin-bottom: 20px; border: 3px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.1); background-color: #fff; }
+        h1 { font-size: 1.5rem; margin: 0 0 10px; font-weight: 600; }
+        p { margin: 0 0 30px; opacity: 0.9; }
+        a.link-card { background-color: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); color: #212121; display: block; padding: 18px; margin-bottom: 16px; border-radius: 12px; text-decoration: none; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        a.link-card:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="${imgSrc}" alt="Photo de profil" class="profile-pic">
+        <h1>${data.profile.name}</h1>
+        <p>${data.profile.bio}</p>
+        <div>
+            ${data.links.map(link => `<a href="${link.url}" class="link-card" target="_blank" rel="noopener noreferrer">${link.title}</a>`).join('')}
+        </div>
+    </div>
+</body>
+</html>`}
+        },
+        'neon-tech': {
+            name: 'Néon Tech',
+            preview: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 90 160' style='background:%23000'%3E%3Ccircle cx='45' cy='30' r='15' fill='%23111' stroke='%230ff' stroke-width='1'/%3E%3Crect x='25' y='50' width='40' height='4' fill='%230ff'/%3E%3E%3Crect x='15' y='70' width='60' height='10' rx='2' fill='%23111' stroke='%23f0f' stroke-width='1'/%3E%3Crect x='15' y='85' width='60' height='10' rx='2' fill='%23111' stroke='%23f0f' stroke-width='1'/%3E%3C/svg%3E`,
+            render: (data, imagePath = null) => {
+                const imgSrc = imagePath || data.profile.photo;
+                return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${data.profile.name}</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono&display=swap');
+        body { font-family: 'Roboto Mono', monospace; background-color: #0d0d0d; color: #00ff9d; display: flex; justify-content: center; padding: 40px 20px; margin:0; }
+        .container { max-width: 680px; width: 100%; text-align: center; }
+        .profile-pic { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; margin-bottom: 20px; border: 2px solid #00ff9d; box-shadow: 0 0 15px #00ff9d; background-color: #222; }
+        h1 { font-size: 1.5rem; margin: 0 0 10px; text-shadow: 0 0 5px #00ff9d; }
+        p { margin: 0 0 30px; color: #ccc; }
+        a.link-card { border: 1px solid #ff00ff; color: #ff00ff; background-color: rgba(255,0,255,0.05); display: block; padding: 18px; margin-bottom: 16px; border-radius: 4px; text-decoration: none; font-weight: 500; transition: background-color 0.2s, box-shadow 0.2s; }
+        a.link-card:hover { background-color: rgba(255,0,255,0.15); box-shadow: 0 0 10px rgba(255,0,255,0.5); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="${imgSrc}" alt="Photo de profil" class="profile-pic">
+        <h1>${data.profile.name}</h1>
+        <p>${data.profile.bio}</p>
+        <div>
+            ${data.links.map(link => `<a href="${link.url}" class="link-card" target="_blank" rel="noopener noreferrer">${link.title}</a>`).join('')}
+        </div>
+    </div>
+</body>
+</html>`}
+        },
+        'brutalist': {
+            name: 'Brutaliste',
+            preview: `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 90 160' style='background:%23f0f0f0'%3E%3Crect x='30' y='15' width='30' height='30' fill='%23bbb' stroke='%23000' stroke-width='2'/%3E%3Crect x='25' y='50' width='40' height='4' fill='%23000'/%3E%3E%3Crect x='15' y='70' width='60' height='10' fill='%23fff' stroke='%23000' stroke-width='2'/%3E%3Crect x='15' y='85' width='60' height='10' fill='%23fff' stroke='%23000' stroke-width='2'/%3E%3C/svg%3E`,
+            render: (data, imagePath = null) => {
+                const imgSrc = imagePath || data.profile.photo;
+                return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${data.profile.name}</title>
+    <style>
+        body { font-family: 'Arial', sans-serif; background-color: #f0f0f0; color: #000; display: flex; justify-content: center; padding: 40px 20px; margin:0; }
+        .container { max-width: 680px; width: 100%; text-align: center; }
+        .profile-pic { width: 100px; height: 100px; object-fit: cover; margin-bottom: 20px; border: 2px solid #000; background-color: #ccc; }
+        h1 { font-size: 1.5rem; margin: 0 0 10px; font-weight: bold; }
+        p { margin: 0 0 30px; }
+        a.link-card { background-color: #fff; border: 2px solid #000; color: #000; display: block; padding: 18px; margin-bottom: 16px; text-decoration: none; font-weight: bold; box-shadow: 4px 4px 0 #000; transition: transform 0.1s, box-shadow 0.1s; }
+        a.link-card:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="${imgSrc}" alt="Photo de profil" class="profile-pic">
+        <h1>${data.profile.name}</h1>
+        <p>${data.profile.bio}</p>
+        <div>
+            ${data.links.map(link => `<a href="${link.url}" class="link-card" target="_blank" rel="noopener noreferrer">${link.title}</a>`).join('')}
+        </div>
+    </div>
+</body>
+</html>`}
+        }
+    };
+
+    // --- STATE ---
+    let siteData = {
+        template: 'minimalist-dark',
+        profile: {
+            photo: 'https://via.placeholder.com/100',
+            name: '@votrenom',
+            bio: 'Bienvenue sur ma page ! Retrouvez ici tous mes liens importants.'
+        },
+        links: [
+            { id: Date.now() + 1, title: 'Mon Portfolio', url: 'https://example.com' },
+            { id: Date.now() + 2, title: 'LinkedIn', url: 'https://linkedin.com' },
+        ]
+    };
+    let uploadedImageFile = null;
+
+    // --- DOM ELEMENTS ---
+    const selectionView = document.getElementById('selection-view');
+    const editorView = document.getElementById('editor-view');
+    const templateGrid = document.getElementById('template-grid');
+    const siteForm = document.getElementById('site-form');
+    const backBtn = document.getElementById('back-btn');
+    const exportBtn = document.getElementById('export-btn');
+    const addLinkBtn = document.getElementById('add-link-btn');
+    const linksContainer = document.getElementById('links-container');
+    const previewFrame = document.getElementById('preview-frame');
+    const photoInput = document.getElementById('photo');
+    
+    // --- FUNCTIONS ---
+    function renderTemplateSelection() {
+        templateGrid.innerHTML = Object.entries(templates).map(([key, tpl]) => `
+            <div class="template-card" data-template-id="${key}" role="button" tabindex="0" aria-label="Choisir le modèle ${tpl.name}">
+                <img src="${tpl.preview}" alt="Aperçu du modèle ${tpl.name}" class="template-preview-img">
+                <div class="template-name">${tpl.name}</div>
+            </div>
+        `).join('');
+    }
+
+    function renderPreview() {
+        const template = templates[siteData.template];
+        if (template) {
+            const htmlContent = template.render(siteData);
+            previewFrame.srcdoc = htmlContent;
+        }
+    }
+
+    function renderLinksForm() {
+        linksContainer.innerHTML = siteData.links.map((link, index) => `
+            <div class="link-item" data-id="${link.id}">
+                <button type="button" class="btn btn-danger" data-action="remove-link" data-index="${index}">&times;</button>
+                <div class="form-group">
+                    <label class="form-label">Titre du lien</label>
+                    <input type="text" class="form-input" data-site="links[${index}].title" value="${link.title}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">URL</label>
+                    <input type="url" class="form-input" data-site="links[${index}].url" value="${link.url}" placeholder="https://...">
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function populateForm() {
+        document.querySelector('[data-site="profile.name"]').value = siteData.profile.name;
+        document.querySelector('[data-site="profile.bio"]').value = siteData.profile.bio;
+        renderLinksForm();
+    }
+
+    function handleFormUpdate(e) {
+        const path = e.target.dataset.site;
+        if (!path) return;
+        
+        const keys = path.replace(/\[(\d+)\]/g, '.$1').split('.');
+        let current = siteData;
+        for (let i = 0; i < keys.length - 1; i++) {
+            current = current[keys[i]];
+        }
+        current[keys[keys.length - 1]] = e.target.value;
+        
+        renderPreview();
+    }
+    
+    function switchToEditor(templateId) {
+        siteData.template = templateId;
+        selectionView.style.display = 'none';
+        editorView.style.display = 'block';
+        document.body.dataset.size = 'xl';
+        populateForm();
+        renderPreview();
+    }
+    
+    function switchToSelection() {
+        editorView.style.display = 'none';
+        selectionView.style.display = 'block';
+        document.body.dataset.size = 'wide';
+    }
+
+    async function exportProject() {
+        if (typeof JSZip === 'undefined') {
+            alert("Erreur: La librairie d'archivage (JSZip) n'a pas pu être chargée.");
+            return;
+        }
+
+        const zip = new JSZip();
+        const template = templates[siteData.template];
+        if (!template) return;
+
+        let imageFileName = null;
+        if (uploadedImageFile) {
+            const extension = uploadedImageFile.name.split('.').pop();
+            imageFileName = `profile-image.${extension}`;
+            zip.file(imageFileName, uploadedImageFile);
+        }
+
+        const htmlContent = template.render(siteData, imageFileName);
+        zip.file("index.html", htmlContent);
+        
+        const content = await zip.generateAsync({ type: 'blob' });
+        
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(content);
+        a.download = 'ma-page-web.zip';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+    }
+
+    // --- EVENT LISTENERS ---
+    templateGrid.addEventListener('click', (e) => {
+        const card = e.target.closest('.template-card');
+        if (card) {
+            switchToEditor(card.dataset.templateId);
+        }
+    });
+
+    backBtn.addEventListener('click', switchToSelection);
+    exportBtn.addEventListener('click', exportProject);
+    
+    siteForm.addEventListener('input', handleFormUpdate);
+    
+    photoInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            uploadedImageFile = file;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                siteData.profile.photo = event.target.result;
+                renderPreview();
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+    
+    addLinkBtn.addEventListener('click', () => {
+        siteData.links.push({ id: Date.now(), title: '', url: '' });
+        renderLinksForm();
+    });
+    
+    linksContainer.addEventListener('click', (e) => {
+      if (e.target.dataset.action === 'remove-link') {
+        siteData.links.splice(e.target.dataset.index, 1);
+        renderLinksForm();
+        renderPreview();
+      }
+    });
+
+    // --- INITIALIZATION ---
+    switchToSelection();
+    renderTemplateSelection();
+
+    // --- BACKGROUND SCRIPT ---
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+        const size = 24; const hexW = 2 * size; const hexH = Math.sqrt(3) * size; const stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)'; ctx.lineWidth = 1;
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX; const y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i; const px = x + size * Math.cos(a); const py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+  </script>
+</body>
+</html>

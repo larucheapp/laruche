@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Générateur de Note de Frais — La Ruche</title>
+  <meta name="description" content="Créez et exportez des notes de frais professionnelles avec calculs automatiques, ajout de logo et de justificatifs en quelques clics.">
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+  <style>
+    :root {
+      --color-bg: #FFFFFF;
+      --color-bg-alt: #F7F8FA;
+      --color-border: #E9EAF0;
+      --color-text-primary: #141417;
+      --color-text-secondary: #6B7280;
+      --color-violet: #7C3AED;
+      --color-violet-dark: #6D28D9;
+      --radius-md: 12px;
+      --radius-lg: 14px;
+      --tool-max-w: 480px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; background-color: var(--color-bg); }
+    body {
+      height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--color-text-primary); line-height: 1.5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    body[data-size="default"] { --tool-max-w: 480px; }
+    body[data-size="wide"] { --tool-max-w: 960px; }
+    body[data-size="xl"] { --tool-max-w: 1200px; }
+
+    #bg-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; }
+
+    .app-header {
+      flex-shrink: 0; background: var(--color-bg-alt); border-bottom: 1px solid var(--color-border);
+      padding: 0 24px; display: flex; align-items: center; height: 70px;
+    }
+    .app-header a { display: inline-flex; align-items: center; }
+    .logo-img { height: 70px; width: auto; vertical-align: middle; }
+
+    .main-content {
+      flex-grow: 1; display: flex; align-items: flex-start; justify-content: center;
+      padding: 48px 24px; overflow-y: auto;
+    }
+    .tool-wrapper { display: flex; flex-direction: column; align-items: center; position: relative; width: 100%; max-width: var(--tool-max-w); }
+    .tool-title {
+      font-size: 1.75rem; font-weight: 600; padding: 12px 28px;
+      background: linear-gradient(45deg, var(--color-violet), var(--color-violet-dark));
+      color: #fff; border-radius: var(--radius-md); margin-bottom: -20px; position: relative; z-index: 5;
+      box-shadow: 0 4px 14px -4px rgba(124, 58, 237, .4);
+    }
+    .generator-card {
+      background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+      padding: 28px; padding-top: 40px; width: 100%;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display: flex; flex-direction: column; gap: 24px;
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-label { font-weight: 500; color: var(--color-text-primary); }
+    .form-input, .form-select {
+      width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+      font-size: 1rem; color: var(--color-text-primary); background: var(--color-bg);
+      transition: border-color .2s, box-shadow .2s;
+    }
+     .form-input:focus, .form-select:focus { outline: none; border-color: var(--color-violet); box-shadow: 0 0 0 3px rgba(124, 58, 237, .2); }
+    
+    .actions { display: flex; justify-content: flex-end; gap: 12px; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      font-weight: 500; padding: 10px 16px; border-radius: var(--radius-md); border: none; cursor:pointer;
+      transition: background-color .2s, box-shadow .2s; font-size: 14px;
+    }
+    .btn:focus-visible { outline: 2px solid transparent; outline-offset: 2px; box-shadow: 0 0 0 3px rgba(124, 58, 237, .4); }
+    .btn-primary { background: var(--color-violet); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--color-violet-dark); }
+    .btn-primary:disabled { background: #A78BFA; cursor: not-allowed; }
+    .status-text { font-size: 14px; color: var(--color-text-secondary); text-align: center; min-height: 21px; padding: 16px; }
+    
+    /* --- STYLES SPÉCIFIQUES --- */
+    .expense-layout {
+        display: grid;
+        grid-template-columns: 1fr 1.5fr;
+        gap: 32px;
+        padding-top: 0;
+    }
+    .panel {
+        padding: 0;
+        padding-top: 40px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    .panel-title {
+        font-size: 1.25rem; font-weight: 600; padding-bottom: 16px;
+        border-bottom: 1px solid var(--color-border); margin-bottom: 0;
+    }
+
+    #logo-preview-wrapper { display: flex; align-items: center; gap: 16px; padding: 10px; border: 1px dashed var(--color-border); border-radius: var(--radius-md); min-height: 82px;}
+    #logo-preview { max-width: 120px; max-height: 60px; object-fit: contain; }
+    
+    .expense-table-wrapper {
+        border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden;
+    }
+    #expense-table { width: 100%; border-collapse: collapse; }
+    #expense-table th, #expense-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--color-border); }
+    #expense-table th { background: var(--color-bg-alt); font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--color-text-secondary); }
+    #expense-table td { font-size: 14px; }
+    #expense-table tbody tr:last-child td { border-bottom: none; }
+    #expense-table .amount { text-align: right; font-variant-numeric: tabular-nums; }
+    .delete-btn { background: none; border: none; color: #EF4444; cursor: pointer; padding: 4px; line-height: 0; }
+    .delete-btn:hover { color: #DC2626; }
+
+    #totals-summary {
+        margin-top: 24px; padding: 16px; background: var(--color-bg-alt);
+        border-radius: var(--radius-lg); border: 1px solid var(--color-border);
+        display: flex; flex-direction: column; gap: 12px;
+    }
+    .total-row { display: flex; justify-content: space-between; font-size: 14px; }
+    .total-row strong { font-size: 16px; font-weight: 600; }
+    
+    .final-actions { grid-column: 1 / -1; border-top: 1px solid var(--color-border); padding-top: 24px; margin-top: 16px; }
+
+    #category-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+    .category-btn {
+        padding: 8px 14px;
+        border: 1px solid var(--color-border);
+        background-color: var(--color-bg);
+        color: var(--color-text-primary);
+        border-radius: var(--radius-md);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all .2s;
+    }
+    .category-btn:hover { border-color: var(--color-violet); color: var(--color-violet); }
+    .category-btn.active {
+        background-color: var(--color-violet);
+        color: #fff;
+        border-color: var(--color-violet);
+    }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="xl">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Générateur de Note de Frais</h1>
+      
+      <div class="generator-card expense-layout" role="region" aria-label="Générateur de Note de Frais">
+        
+        <!-- === PANNEAU GAUCHE : INFOS GÉNÉRALES === -->
+        <div class="panel" id="info-panel">
+            <h2 class="panel-title">Informations Générales</h2>
+            <div class="form-group">
+                <label for="employee-name" class="form-label">Votre Nom Complet</label>
+                <input type="text" id="employee-name" class="form-input" placeholder="Ex: Jean Dupont">
+            </div>
+            <div class="form-group">
+                <label for="employee-dept" class="form-label">Votre Département/Équipe</label>
+                <input type="text" id="employee-dept" class="form-input" placeholder="Ex: Marketing">
+            </div>
+            <div class="form-group">
+                <label for="company-name" class="form-label">Nom de l'Entreprise</label>
+                <input type="text" id="company-name" class="form-input" placeholder="Ex: La Ruche SAS">
+            </div>
+            <div class="form-group">
+                <label for="report-period" class="form-label">Période de la note</label>
+                <input type="text" id="report-period" class="form-input" placeholder="Ex: Octobre 2023">
+            </div>
+            <div class="form-group">
+                <label for="company-logo" class="form-label">Logo de l'entreprise (optionnel)</label>
+                <div id="logo-preview-wrapper">
+                  <img id="logo-preview" src="" alt="Aperçu du logo" style="display:none;">
+                  <span id="logo-placeholder" class="status-text">Aucun logo</span>
+                </div>
+                <input type="file" id="company-logo" class="form-input" accept="image/png, image/jpeg">
+            </div>
+        </div>
+
+        <!-- === PANNEAU DROIT : DÉPENSES === -->
+        <div class="panel" id="expenses-panel">
+            <h2 class="panel-title">Détail des Dépenses</h2>
+            <form id="add-expense-form" class="generator-card" style="padding:24px; padding-top:24px; box-shadow:none;">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+                  <div class="form-group" style="grid-column: 1 / -1;">
+                      <label for="expense-desc" class="form-label">Description</label>
+                      <input type="text" id="expense-desc" class="form-input" placeholder="Ex: Déjeuner client" required>
+                  </div>
+                   <div class="form-group" style="grid-column: 1 / -1;">
+                      <label class="form-label">Catégorie</label>
+                      <div id="category-buttons">
+                        <button type="button" class="category-btn active" data-category="Repas">Repas</button>
+                        <button type="button" class="category-btn" data-category="Transport">Transport</button>
+                        <button type="button" class="category-btn" data-category="Hébergement">Hébergement</button>
+                        <button type="button" class="category-btn" data-category="Fournitures">Fournitures</button>
+                        <button type="button" class="category-btn" data-category="Autre">Autre</button>
+                      </div>
+                  </div>
+                  <div class="form-group">
+                      <label for="expense-date" class="form-label">Date</label>
+                      <input type="date" id="expense-date" class="form-input" required>
+                  </div>
+                  <div class="form-group">
+                      <label for="expense-amount-ht" class="form-label">Montant HT (€)</label>
+                      <input type="number" id="expense-amount-ht" class="form-input" placeholder="25.00" step="0.01" required>
+                  </div>
+                  <div class="form-group" style="grid-column: 1;">
+                      <label for="expense-vat" class="form-label">TVA (€)</label>
+                      <input type="number" id="expense-vat" class="form-input" placeholder="5.00" step="0.01" value="0">
+                  </div>
+                   <div class="form-group" style="grid-column: 1 / -1;">
+                      <label for="expense-receipt" class="form-label">Justificatif (image)</label>
+                      <input type="file" id="expense-receipt" class="form-input" accept="image/png, image/jpeg">
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-primary" style="align-self: flex-end;">Ajouter la dépense</button>
+            </form>
+            
+            <div id="expense-list-wrapper">
+                <div class="expense-table-wrapper">
+                    <table id="expense-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Description</th>
+                                <th class="amount">HT</th>
+                                <th class="amount">TVA</th>
+                                <th class="amount">TTC</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="expense-list-body"></tbody>
+                    </table>
+                </div>
+                <div id="expense-placeholder" class="status-text">Aucune dépense ajoutée.</div>
+            </div>
+
+            <div id="totals-summary" style="display:none;">
+                <div class="total-row">
+                    <span>Total HT</span>
+                    <span id="total-ht">0,00 €</span>
+                </div>
+                <div class="total-row">
+                    <span>Total TVA</span>
+                    <span id="total-vat">0,00 €</span>
+                </div>
+                <hr style="border:none; border-top:1px solid var(--color-border); margin: 4px 0;">
+                <div class="total-row">
+                    <strong>À rembourser (TTC)</strong>
+                    <strong id="total-ttc">0,00 €</strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="actions final-actions">
+            <button id="generate-pdf-btn" class="btn btn-primary">Générer la Note de Frais (PDF)</button>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const { jsPDF } = window.jspdf;
+        
+        // --- STATE ---
+        let expenses = [];
+        let nextExpenseId = 1;
+        let companyLogoBase64 = null;
+        let selectedCategory = 'Repas';
+
+        // --- DOM ELEMENTS ---
+        const addExpenseForm = document.getElementById('add-expense-form');
+        const expenseListBody = document.getElementById('expense-list-body');
+        const expensePlaceholder = document.getElementById('expense-placeholder');
+        const totalsSummary = document.getElementById('totals-summary');
+        const totalHtEl = document.getElementById('total-ht');
+        const totalVatEl = document.getElementById('total-vat');
+        const totalTtcEl = document.getElementById('total-ttc');
+        const companyLogoInput = document.getElementById('company-logo');
+        const logoPreview = document.getElementById('logo-preview');
+        const logoPlaceholder = document.getElementById('logo-placeholder');
+        const generatePdfBtn = document.getElementById('generate-pdf-btn');
+        const categoryButtonsContainer = document.getElementById('category-buttons');
+
+        // --- FUNCTIONS ---
+        const formatCurrency = (value) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
+
+        const fileToBase64 = (file) => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+        });
+
+        const updateTotals = () => {
+            const totalHt = expenses.reduce((sum, exp) => sum + exp.amountHt, 0);
+            const totalVat = expenses.reduce((sum, exp) => sum + exp.vat, 0);
+            const totalTtc = totalHt + totalVat;
+
+            totalHtEl.textContent = formatCurrency(totalHt);
+            totalVatEl.textContent = formatCurrency(totalVat);
+            totalTtcEl.textContent = formatCurrency(totalTtc);
+        };
+        
+        const renderExpenses = () => {
+            expenseListBody.innerHTML = '';
+            if (expenses.length === 0) {
+                expensePlaceholder.style.display = 'block';
+                totalsSummary.style.display = 'none';
+                return;
+            }
+            expensePlaceholder.style.display = 'none';
+            totalsSummary.style.display = 'block';
+
+            expenses.forEach(exp => {
+                const row = document.createElement('tr');
+                const ttc = exp.amountHt + exp.vat;
+                row.innerHTML = `
+                    <td>${new Date(exp.date).toLocaleDateString('fr-FR')}</td>
+                    <td>
+                        ${exp.description}<br>
+                        <small style="color: var(--color-text-secondary);">${exp.category}</small>
+                    </td>
+                    <td class="amount">${formatCurrency(exp.amountHt)}</td>
+                    <td class="amount">${formatCurrency(exp.vat)}</td>
+                    <td class="amount"><strong>${formatCurrency(ttc)}</strong></td>
+                    <td>
+                        <button class="delete-btn" data-id="${exp.id}" aria-label="Supprimer la dépense">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                        </button>
+                    </td>
+                `;
+                expenseListBody.appendChild(row);
+            });
+            updateTotals();
+        };
+
+        // --- EVENT HANDLERS ---
+        companyLogoInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                companyLogoBase64 = await fileToBase64(file);
+                logoPreview.src = companyLogoBase64;
+                logoPreview.style.display = 'block';
+                logoPlaceholder.style.display = 'none';
+            }
+        });
+
+        categoryButtonsContainer.addEventListener('click', (e) => {
+            const clickedButton = e.target.closest('.category-btn');
+            if (!clickedButton) return;
+            
+            selectedCategory = clickedButton.dataset.category;
+
+            categoryButtonsContainer.querySelectorAll('.category-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            clickedButton.classList.add('active');
+        });
+
+        addExpenseForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const descInput = document.getElementById('expense-desc');
+            const dateInput = document.getElementById('expense-date');
+            const amountHtInput = document.getElementById('expense-amount-ht');
+            const vatInput = document.getElementById('expense-vat');
+            const receiptInput = document.getElementById('expense-receipt');
+            
+            let receiptBase64 = null;
+            if (receiptInput.files[0]) {
+                receiptBase64 = await fileToBase64(receiptInput.files[0]);
+            }
+
+            expenses.push({
+                id: nextExpenseId++,
+                description: descInput.value,
+                date: dateInput.value,
+                category: selectedCategory,
+                amountHt: parseFloat(amountHtInput.value) || 0,
+                vat: parseFloat(vatInput.value) || 0,
+                receipt: receiptBase64
+            });
+
+            renderExpenses();
+            addExpenseForm.reset();
+            // Reset category to default visually
+            categoryButtonsContainer.querySelectorAll('.category-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.category === 'Repas');
+            });
+            selectedCategory = 'Repas';
+        });
+
+        expenseListBody.addEventListener('click', (e) => {
+            if (e.target.closest('.delete-btn')) {
+                const idToDelete = parseInt(e.target.closest('.delete-btn').dataset.id, 10);
+                expenses = expenses.filter(exp => exp.id !== idToDelete);
+                renderExpenses();
+            }
+        });
+
+        generatePdfBtn.addEventListener('click', () => {
+            const employeeName = document.getElementById('employee-name').value || 'Non spécifié';
+            const employeeDept = document.getElementById('employee-dept').value || 'Non spécifié';
+            const companyName = document.getElementById('company-name').value || 'Entreprise';
+            const reportPeriod = document.getElementById('report-period').value || 'Période non spécifiée';
+
+            generatePdfBtn.disabled = true;
+            generatePdfBtn.textContent = 'Génération...';
+
+            try {
+                const doc = new jsPDF();
+
+                // --- HEADER ---
+                if (companyLogoBase64) {
+                    const imgProps = doc.getImageProperties(companyLogoBase64);
+                    const aspectRatio = imgProps.width / imgProps.height;
+                    const logoWidth = 40;
+                    const logoHeight = logoWidth / aspectRatio;
+                    doc.addImage(companyLogoBase64, 'JPEG', 15, 10, logoWidth, logoHeight);
+                }
+                doc.setFontSize(22);
+                doc.setFont('helvetica', 'bold');
+                doc.text('Note de Frais', 205, 25, { align: 'right' });
+                doc.setFontSize(12);
+                doc.setFont('helvetica', 'normal');
+                doc.text(companyName, 205, 35, { align: 'right' });
+                
+                // --- INFO SECTION ---
+                doc.setLineWidth(0.5);
+                doc.line(15, 45, 205, 45);
+                
+                doc.setFontSize(11);
+                doc.text(`Employé(e):`, 15, 55);
+                doc.setFont('helvetica', 'bold');
+                doc.text(employeeName, 55, 55);
+                
+                doc.setFont('helvetica', 'normal');
+                doc.text(`Département:`, 15, 62);
+                doc.setFont('helvetica', 'bold');
+                doc.text(employeeDept, 55, 62);
+                
+                doc.setFont('helvetica', 'normal');
+                doc.text(`Période:`, 15, 69);
+                doc.setFont('helvetica', 'bold');
+                doc.text(reportPeriod, 55, 69);
+                
+                // --- EXPENSE TABLE ---
+                const tableBody = expenses.map(exp => {
+                    const ttc = exp.amountHt + exp.vat;
+                    return [
+                        new Date(exp.date).toLocaleDateString('fr-FR'),
+                        `${exp.description}\n(${exp.category})`,
+                        formatCurrency(exp.amountHt),
+                        formatCurrency(exp.vat),
+                        formatCurrency(ttc),
+                        exp.receipt ? 'Oui' : 'Non'
+                    ];
+                });
+
+                doc.autoTable({
+                    startY: 80,
+                    head: [['Date', 'Description', 'Montant HT', 'TVA', 'Total TTC', 'Justif.']],
+                    body: tableBody,
+                    theme: 'striped',
+                    headStyles: { fillColor: [124, 58, 237] },
+                    styles: { cellPadding: 2.5, fontSize: 9 },
+                    columnStyles: {
+                        2: { halign: 'right' },
+                        3: { halign: 'right' },
+                        4: { halign: 'right' },
+                        5: { halign: 'center' },
+                    }
+                });
+
+                // --- TOTALS & SIGNATURES ---
+                let finalY = doc.lastAutoTable.finalY + 15;
+                const totalHt = expenses.reduce((sum, exp) => sum + exp.amountHt, 0);
+                const totalVat = expenses.reduce((sum, exp) => sum + exp.vat, 0);
+
+                doc.setFontSize(12);
+                doc.text('Total HT:', 150, finalY, { align: 'right' });
+                doc.text(formatCurrency(totalHt), 205, finalY, { align: 'right' });
+                doc.text('Total TVA:', 150, finalY + 7, { align: 'right' });
+                doc.text(formatCurrency(totalVat), 205, finalY + 7, { align: 'right' });
+                doc.setFont('helvetica', 'bold');
+                doc.text('Total à rembourser:', 150, finalY + 14, { align: 'right' });
+                doc.text(formatCurrency(totalHt + totalVat), 205, finalY + 14, { align: 'right' });
+
+                finalY += 40;
+                doc.line(15, finalY + 10, 85, finalY + 10);
+                doc.text("Signature de l'employé(e)", 15, finalY + 15);
+                doc.line(135, finalY + 10, 205, finalY + 10);
+                doc.text("Signature du manager", 135, finalY + 15);
+
+                // --- RECEIPTS ---
+                const expensesWithReceipts = expenses.filter(exp => exp.receipt);
+                if (expensesWithReceipts.length > 0) {
+                    doc.addPage();
+                    doc.setFontSize(16);
+                    doc.text('Justificatifs', 15, 20);
+                    
+                    let y = 30;
+                    expensesWithReceipts.forEach((exp, index) => {
+                        const imgProps = doc.getImageProperties(exp.receipt);
+                        const maxWidth = 180;
+                        const maxHeight = 120;
+                        let imgWidth = imgProps.width;
+                        let imgHeight = imgProps.height;
+                        
+                        if (imgWidth > maxWidth) {
+                            const ratio = maxWidth / imgWidth;
+                            imgWidth = maxWidth;
+                            imgHeight *= ratio;
+                        }
+                        if (imgHeight > maxHeight) {
+                            const ratio = maxHeight / imgHeight;
+                            imgHeight = maxHeight;
+                            imgWidth *= ratio;
+                        }
+
+                        if (y + imgHeight + 15 > 290) { // Check if it fits on the page
+                            doc.addPage();
+                            y = 20;
+                        }
+
+                        doc.setFontSize(10);
+                        doc.text(`Dépense: ${exp.description} (${new Date(exp.date).toLocaleDateString('fr-FR')})`, 15, y);
+                        doc.addImage(exp.receipt, 'JPEG', 15, y + 5, imgWidth, imgHeight);
+                        y += imgHeight + 20;
+                        if (index < expensesWithReceipts.length -1) {
+                           doc.setLineWidth(0.2);
+                           doc.line(15, y - 5, 205, y - 5);
+                        }
+                    });
+                }
+                
+                doc.save(`note-de-frais-${employeeName.replace(' ','-')}-${reportPeriod}.pdf`);
+
+            } catch (error) {
+                console.error("Erreur PDF:", error);
+                alert("Une erreur est survenue pendant la génération du PDF.");
+            } finally {
+                generatePdfBtn.disabled = false;
+                generatePdfBtn.textContent = 'Générer la Note de Frais (PDF)';
+            }
+        });
+        
+        // --- INITIALIZATION ---
+        renderExpenses();
+    });
+
+    // Background hex grid — NE PAS MODIFIER
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+        const size = 24, hexW = 2 * size, hexH = Math.sqrt(3) * size, stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)';
+        ctx.lineWidth = 1;
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX, y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i, px = x + size * Math.cos(a), py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

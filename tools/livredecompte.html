@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche" >
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Livre de Comptes — La Ruche</title>
+  <meta name="description" content="Un outil simple pour suivre vos recettes et exporter votre livre de comptes en PDF.">
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --color-red: #EF4444;
+      --color-red-light: #FEE2E2;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px; /* par défaut, peut être changé via body[data-size] */
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:flex-start; justify-content:center;
+      padding:48px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative; width: 100%;}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+    .form-group{display:flex; flex-direction:column; gap:8px}
+    .form-label{font-weight:500; color:var(--color-text-primary)}
+    .form-input, .form-select {
+      width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      font-size:1rem; color:var(--color-text-primary); background:var(--color-bg);
+      transition:border-color .2s, box-shadow .2s;
+      -webkit-appearance: none; -moz-appearance: none; appearance: none;
+    }
+    .form-select {
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+        background-position: right 0.5rem center;
+        background-repeat: no-repeat;
+        background-size: 1.5em 1.5em;
+        padding-right: 2.5rem;
+    }
+    .form-input:focus, .form-select:focus {outline:none; border-color:var(--color-violet); box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+    .actions{display:flex; justify-content:flex-end; gap:12px}
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:500; padding:10px 16px; border-radius:var(--radius-md); border:1px solid transparent; cursor:pointer;
+      transition:background-color .2s, box-shadow .2s, border-color .2s; font-size:14px;
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn-primary{background:var(--color-violet); color:#fff; border-color:var(--color-violet)}
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark); border-color:var(--color-violet-dark)}
+    .btn-primary:disabled{background:#A78BFA; border-color:#A78BFA; cursor:not-allowed}
+    .btn-danger{background:transparent; color:var(--color-red); border-color:var(--color-border)}
+    .btn-danger:hover{background:var(--color-red-light); border-color:var(--color-red-light); color:var(--color-red)}
+    
+    /* --- STYLES SPÉCIFIQUES --- */
+    .transaction-form { display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap; }
+    .transaction-form .form-group { flex-grow:1; }
+    .transaction-form .form-group.date, .transaction-form .form-group.amount, .transaction-form .form-group.payment { flex-grow:0; flex-basis:150px; }
+    .transaction-form .add-btn { flex-shrink:0; height:45px; width:45px; padding:0; }
+    
+    .table-wrapper { border:1px solid var(--color-border); border-radius:var(--radius-md); overflow:hidden; }
+    .transactions-table { width:100%; border-collapse:collapse; font-size:14px; }
+    .transactions-table th, .transactions-table td { padding:12px 16px; text-align:left; border-bottom:1px solid var(--color-border); }
+    .transactions-table th { font-weight:500; color:var(--color-text-secondary); background-color:var(--color-bg-alt); }
+    .transactions-table tbody tr:last-child td { border-bottom:none; }
+    .transactions-table tbody tr:hover { background-color:rgba(247,248,250, 0.5); }
+    .transactions-table .amount, .transactions-table .total-amount { text-align:right; font-variant-numeric:tabular-nums; }
+    .transactions-table .amount { font-weight:500; color: #16A34A; }
+    .transactions-table .total-amount { font-weight:600; font-size:1rem; }
+    .transactions-table .action-cell { text-align:right; }
+    .delete-btn {
+      background:transparent; border:none; cursor:pointer; color:var(--color-text-secondary);
+      padding:6px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
+      transition: color .2s, background-color .2s;
+    }
+    .delete-btn:hover { color:var(--color-red); background-color:var(--color-red-light); }
+    .empty-state { text-align:center; color:var(--color-text-secondary); padding: 48px 24px; }
+    .card-footer { display: flex; justify-content: flex-end; align-items: center; gap: 12px; border-top: 1px solid var(--color-border); padding-top: 24px; margin-top: -1px; }
+
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="xl">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Livre de Comptes</h1>
+
+      <div class="generator-card" role="region" aria-label="Livre de Comptes">
+        <form id="add-transaction-form" class="transaction-form">
+          <div class="form-group date">
+            <label for="date" class="form-label">Date</label>
+            <input type="date" id="date" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label for="description" class="form-label">Libellé</label>
+            <input type="text" id="description" class="form-input" placeholder="Ex: Vente site web" required>
+          </div>
+           <div class="form-group payment">
+            <label for="payment-method" class="form-label">Paiement</label>
+            <select id="payment-method" class="form-select">
+              <option>Carte</option>
+              <option>Espèces</option>
+              <option>Virement</option>
+              <option>Chèque</option>
+            </select>
+          </div>
+          <div class="form-group amount">
+            <label for="amount" class="form-label">Montant (€)</label>
+            <input type="number" id="amount" class="form-input" placeholder="0.00" min="0.01" step="0.01" required>
+          </div>
+          <button type="submit" class="btn btn-primary add-btn" aria-label="Ajouter la recette">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+        </form>
+        
+        <div class="table-wrapper">
+            <table class="transactions-table" aria-live="polite">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Libellé</th>
+                        <th>Paiement</th>
+                        <th class="amount">Montant</th>
+                        <th class="action-cell">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="transactions-body">
+                    <!-- Les lignes de transactions seront insérées ici -->
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="3" style="text-align:right; font-weight:600;">Solde Total</td>
+                        <td id="total-balance" class="total-amount">0,00 €</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        
+        <div class="card-footer">
+             <button id="clear-all-btn" class="btn btn-danger">Tout effacer</button>
+             <button id="export-pdf-btn" class="btn btn-primary">Exporter en PDF</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Background hex grid — NE PAS MODIFIER
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+        const size = 24, hexW = 2 * size, hexH = Math.sqrt(3) * size, stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)';
+        ctx.lineWidth = 1;
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX, y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i, px = x + size * Math.cos(a), py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+  </script>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const { jsPDF } = window.jspdf;
+        const TRANSACTIONS_KEY = 'laruche-transactions';
+
+        // DOM Elements
+        const form = document.getElementById('add-transaction-form');
+        const dateInput = document.getElementById('date');
+        const descriptionInput = document.getElementById('description');
+        const paymentMethodInput = document.getElementById('payment-method');
+        const amountInput = document.getElementById('amount');
+        const transactionsBody = document.getElementById('transactions-body');
+        const totalBalanceEl = document.getElementById('total-balance');
+        const exportPdfBtn = document.getElementById('export-pdf-btn');
+        const clearAllBtn = document.getElementById('clear-all-btn');
+
+        let transactions = [];
+
+        // --- Data Persistence ---
+        const loadTransactions = () => {
+            const saved = localStorage.getItem(TRANSACTIONS_KEY);
+            transactions = saved ? JSON.parse(saved) : [];
+            transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+        };
+
+        const saveTransactions = () => {
+            localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
+        };
+        
+        // --- Rendering & Formatting ---
+        const formatCurrency = (value) => {
+            return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
+        };
+        
+        const formatDate = (dateString) => {
+             const date = new Date(dateString);
+             return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric'});
+        }
+
+        const renderTransactions = () => {
+            transactionsBody.innerHTML = '';
+
+            if (transactions.length === 0) {
+                transactionsBody.innerHTML = '<tr><td colspan="5" class="empty-state">Aucune recette enregistrée pour le moment.</td></tr>';
+            } else {
+                 transactions.forEach(tx => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${formatDate(tx.date)}</td>
+                        <td>${tx.description}</td>
+                        <td>${tx.paymentMethod}</td>
+                        <td class="amount">+ ${formatCurrency(tx.amount)}</td>
+                        <td class="action-cell">
+                            <button class="delete-btn" data-id="${tx.id}" title="Supprimer">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                            </button>
+                        </td>
+                    `;
+                    transactionsBody.appendChild(row);
+                });
+            }
+
+            const totalBalance = transactions.reduce((sum, tx) => sum + tx.amount, 0);
+            totalBalanceEl.textContent = formatCurrency(totalBalance);
+            
+            exportPdfBtn.disabled = transactions.length === 0;
+            clearAllBtn.disabled = transactions.length === 0;
+        };
+
+        // --- Actions ---
+        const addTransaction = (e) => {
+            e.preventDefault();
+            const newTransaction = {
+                id: Date.now(),
+                date: dateInput.value,
+                description: descriptionInput.value.trim(),
+                paymentMethod: paymentMethodInput.value,
+                amount: parseFloat(amountInput.value)
+            };
+
+            transactions.unshift(newTransaction);
+            transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            saveTransactions();
+            renderTransactions();
+            form.reset();
+            dateInput.valueAsDate = new Date();
+        };
+
+        const deleteTransaction = (id) => {
+            transactions = transactions.filter(tx => tx.id !== id);
+            saveTransactions();
+            renderTransactions();
+        };
+        
+        const exportPDF = () => {
+            const doc = new jsPDF();
+            
+            // Fonction de formatage spécifique pour le PDF pour éviter les pbs de rendu de caractères
+            const formatCurrencyForPdf = (value) => {
+                const parts = value.toFixed(2).split('.');
+                const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " "); // Espace comme séparateur de milliers
+                return `${integerPart},${parts[1]} EUR`;
+            };
+
+            doc.setFontSize(18);
+            doc.text('Livre de Recettes', 14, 22);
+            doc.setFontSize(11);
+            doc.setTextColor(100);
+            doc.text(`Exporté le ${new Date().toLocaleDateString('fr-FR')}`, 14, 28);
+
+            const tableData = transactions.map(tx => [
+                formatDate(tx.date),
+                tx.description,
+                tx.paymentMethod,
+                { content: formatCurrencyForPdf(tx.amount), styles: { halign: 'right' } }
+            ]);
+            
+            const total = transactions.reduce((sum, tx) => sum + tx.amount, 0);
+            
+            // Ligne de total sans colSpan pour un meilleur alignement
+            tableData.push([
+                { content: ''}, // Colonne 1 vide
+                { content: ''}, // Colonne 2 vide
+                { content: 'Solde Total', styles: { halign: 'right', fontStyle: 'bold' } }, // Colonne 3
+                { content: formatCurrencyForPdf(total), styles: { halign: 'right', fontStyle: 'bold' } } // Colonne 4
+            ]);
+
+            doc.autoTable({
+                head: [['Date', 'Libellé', 'Paiement', 'Montant']],
+                body: tableData,
+                startY: 35,
+                headStyles: { fillColor: [124, 58, 237] }, // --color-violet
+                theme: 'grid',
+            });
+
+            doc.save('livre-de-comptes.pdf');
+        };
+
+        // --- Event Listeners ---
+        form.addEventListener('submit', addTransaction);
+        
+        transactionsBody.addEventListener('click', (e) => {
+            const deleteBtn = e.target.closest('.delete-btn');
+            if (deleteBtn) {
+                const id = parseInt(deleteBtn.dataset.id, 10);
+                if(confirm('Êtes-vous sûr de vouloir supprimer cette recette ?')) {
+                    deleteTransaction(id);
+                }
+            }
+        });
+
+        exportPdfBtn.addEventListener('click', exportPDF);
+        
+        clearAllBtn.addEventListener('click', () => {
+            if (confirm('Êtes-vous sûr de vouloir effacer toutes les recettes ? Cette action est irréversible.')) {
+                transactions = [];
+                saveTransactions();
+                renderTransactions();
+            }
+        });
+
+
+        // --- Initialization ---
+        const init = () => {
+            dateInput.valueAsDate = new Date();
+            loadTransactions();
+            renderTransactions();
+        };
+
+        init();
+    });
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

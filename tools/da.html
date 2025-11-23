@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Générateur d'Identité Visuelle</title>
+  <meta name="description" content="Un outil pour générer une identité visuelle complète (palette de couleurs, typographies) pour les projets e-commerce. Propose des styles prédéfinis ou extrait une palette depuis une image, puis exporte le tout en PDF.">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoVBL5gI9kAJmbSoBNlRYX4HgEgHidA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px;
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:flex-start; justify-content:center;
+      padding:48px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+    .form-group{display:flex; flex-direction:column; gap:8px}
+    .form-label{font-weight:500; color:var(--color-text-primary)}
+    .form-input{
+      width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      font-size:1rem; color:var(--color-text-primary); background:var(--color-bg);
+      transition:border-color .2s, box-shadow .2s;
+    }
+    .form-input:focus{outline:none; border-color:var(--color-violet); box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+    .actions{display:flex; justify-content:flex-end; gap:12px}
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:500; padding:10px 16px; border-radius:var(--radius-md); border:none; cursor:pointer;
+      transition:background-color .2s, box-shadow .2s, color .2s, border-color .2s, opacity .2s; font-size:14px;
+      background-color: transparent;
+      border: 1px solid var(--color-border);
+      color: var(--color-text-primary);
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn-primary{background:var(--color-violet); color:#fff; border-color: transparent;}
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark)}
+    .btn:hover:not(:disabled):not(.btn-primary){border-color:var(--color-violet); color:var(--color-violet)}
+    .btn:disabled{opacity:0.6; cursor:not-allowed !important}
+    .status-text{font-size:14px; color:var(--color-text-secondary); text-align:center; min-height:21px}
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="wide">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Générateur d'Identité Visuelle</h1>
+
+      <div class="generator-card" role="region" aria-label="Générateur d'Identité Visuelle">
+        <div style="display: flex; flex-direction: column; gap: 24px;">
+            <div class="actions" style="justify-content: center; gap: 16px;">
+                <button id="btn-premade" class="btn btn-primary">
+                    Style Prédéfini
+                </button>
+                <button id="btn-upload" class="btn">
+                    Importer une Image
+                </button>
+                <input
+                    type="file"
+                    id="image-input"
+                    accept="image/png, image/jpeg"
+                    style="display: none;"
+                />
+            </div>
+
+            <p id="status-text" class="status-text">Choisissez une option pour commencer.</p>
+            
+            <div id="preview-container"></div> 
+
+            <div id="export-container" class="actions" style="justify-content: center; display: none;">
+                <button id="btn-export" class="btn btn-primary">
+                    Exporter en PDF
+                </button>
+            </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Background hex grid
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+        const size = 24; const hexW = 2 * size; const hexH = Math.sqrt(3) * size;
+        const stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)'; ctx.lineWidth = 1;
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX; const y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i;
+              const px = x + size * Math.cos(a); const py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+  </script>
+  
+  <script type="module">
+    // --- STATE ---
+    let designSystem = null;
+    let isLoading = false;
+    let statusMessage = "Choisissez une option pour commencer.";
+    let preMadeSetIndex = -1;
+
+    // --- DOM ELEMENTS ---
+    const btnPremade = document.getElementById('btn-premade');
+    const btnUpload = document.getElementById('btn-upload');
+    const imageInput = document.getElementById('image-input');
+    const statusText = document.getElementById('status-text');
+    const previewContainer = document.getElementById('preview-container');
+    const exportContainer = document.getElementById('export-container');
+    const btnExport = document.getElementById('btn-export');
+    const allButtons = [btnPremade, btnUpload, btnExport];
+
+    // --- DESIGN SYSTEM SERVICE ---
+    const preMadeSets = [
+        { name: "Luxe Discret", palette: { primary: { name: "Bleu Nuit", hex: "#0D1B2A" }, secondary: { name: "Or Antique", hex: "#C4A261" }, accent: { name: "Ivoire", hex: "#E0DDCF" }, neutrals: { light: { name: "Blanc Cassé", hex: "#F8F7F4" }, dark: { name: "Gris Foncé", hex: "#415A77" } } }, typography: { heading: { family: "'Cormorant Garamond', serif", weight: 700 }, body: { family: "'Lato', sans-serif", weight: 400 } } },
+        { name: "Éclat Naturel", palette: { primary: { name: "Vert Forêt", hex: "#283618" }, secondary: { name: "Beige Sable", hex: "#FEFAE0" }, accent: { name: "Terre Cuite", hex: "#BC6C25" }, neutrals: { light: { name: "Crème", hex: "#FAEDCD" }, dark: { name: "Brun Riche", hex: "#606C38" } } }, typography: { heading: { family: "'Playfair Display', serif", weight: 600 }, body: { family: "'Montserrat', sans-serif", weight: 400 } } },
+        { name: "Pop Énergique", palette: { primary: { name: "Corail Vif", hex: "#FF6B6B" }, secondary: { name: "Jaune Soleil", hex: "#FFD93D" }, accent: { name: "Turquoise", hex: "#4D96FF" }, neutrals: { light: { name: "Gris Très Clair", hex: "#F7F7F7" }, dark: { name: "Bleu Marine", hex: "#0B2447" } } }, typography: { heading: { family: "'Poppins', sans-serif", weight: 700 }, body: { family: "'Roboto', sans-serif", weight: 400 } } }
+    ];
+
+    const getNextPreMadeSet = (index) => {
+        if (typeof index === 'number') {
+            preMadeSetIndex = index % preMadeSets.length;
+        } else {
+            preMadeSetIndex = (preMadeSetIndex + 1) % preMadeSets.length;
+        }
+        return preMadeSets[preMadeSetIndex];
+    };
+
+    const rgbToHex = (r, g, b) => '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+
+    const generatePaletteFromImage = (imageDataUrl) => {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d', { willReadFrequently: true });
+                if (!context) return reject(new Error("Could not get canvas context"));
+
+                const scale = Math.min(100 / img.width, 100 / img.height);
+                canvas.width = img.width * scale;
+                canvas.height = img.height * scale;
+                context.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                const imageData = context.getImageData(0, 0, canvas.width, canvas.height).data;
+                const colorCounts = {};
+                for (let i = 0; i < imageData.length; i += 4 * 5) {
+                    const r = imageData[i], g = imageData[i + 1], b = imageData[i + 2];
+                    const key = `${Math.round(r/32)*32},${Math.round(g/32)*32},${Math.round(b/32)*32}`;
+                    if (!colorCounts[key]) colorCounts[key] = { count: 0, rgb: [0, 0, 0] };
+                    colorCounts[key].count++;
+                    colorCounts[key].rgb[0] += r; colorCounts[key].rgb[1] += g; colorCounts[key].rgb[2] += b;
+                }
+
+                const sortedColors = Object.values(colorCounts).sort((a, b) => b.count - a.count);
+                const getAvgHex = (colorData) => {
+                    if (!colorData) return null;
+                    const avgR = Math.round(colorData.rgb[0] / colorData.count);
+                    const avgG = Math.round(colorData.rgb[1] / colorData.count);
+                    const avgB = Math.round(colorData.rgb[2] / colorData.count);
+                    return rgbToHex(avgR, avgG, avgB);
+                };
+
+                const palette = {
+                    primary: { name: 'Primaire', hex: getAvgHex(sortedColors[0]) || '#000000' },
+                    secondary: { name: 'Secondaire', hex: getAvgHex(sortedColors[1]) || '#cccccc' },
+                    accent: { name: 'Accent', hex: getAvgHex(sortedColors[2]) || '#ff0000' },
+                    neutrals: {
+                        light: { name: 'Clair', hex: getAvgHex(sortedColors[sortedColors.length - 1]) || '#ffffff' },
+                        dark: { name: 'Foncé', hex: getAvgHex(sortedColors[3]) || '#333333' }
+                    }
+                };
+                resolve(palette);
+            };
+            img.onerror = reject;
+            img.src = imageDataUrl;
+        });
+    };
+
+    // --- PDF SERVICE ---
+    const generatePdf = async () => {
+      const previewElement = document.getElementById('preview-area');
+      if (!previewElement) return;
+
+      try {
+        const canvas = await html2canvas(previewElement, { scale: 2, backgroundColor: '#ffffff', useCORS: true, windowWidth: previewElement.scrollWidth, windowHeight: previewElement.scrollHeight });
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jspdf.jsPDF({ orientation: 'p', unit: 'px', format: 'a4' });
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pageMargin = 40;
+        const contentWidth = pdfWidth - pageMargin * 2;
+        const imgHeight = canvas.height * contentWidth / canvas.width;
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(24);
+        pdf.setTextColor('#141417');
+        pdf.text("Votre Identité Visuelle", pdfWidth / 2, pageMargin + 10, { align: 'center' });
+        pdf.addImage(imgData, 'PNG', pageMargin, pageMargin + 40, contentWidth, imgHeight);
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(10);
+        pdf.setTextColor('#6B7280');
+        const footerY = pdf.internal.pageSize.getHeight() - 20;
+        pdf.text('Généré par La Ruche', pdfWidth / 2, footerY, { align: 'center' });
+        
+        pdf.save('identite-visuelle-la-ruche.pdf');
+      } catch (error) {
+        console.error("Failed to generate PDF:", error);
+        statusMessage = "Erreur lors de la création du PDF.";
+      }
+    };
+    
+    // --- UI RENDERING ---
+    const renderDesignPreview = (system) => {
+        const { palette, typography } = system;
+
+        if (!document.getElementById('google-fonts-link')) {
+            const link = document.createElement('link');
+            link.id = 'google-fonts-link';
+            link.rel = 'stylesheet';
+            link.href = "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@700&family=Lato&family=Playfair+Display:wght@600&family=Montserrat&family=Poppins:wght@700&family=Roboto&display=swap";
+            document.head.appendChild(link);
+        }
+
+        const colorToSwatchHTML = (color) => `
+            <div style="flex: 1; min-width: 120px;">
+                <div style="width: 100%; height: 80px; background-color: ${color.hex}; border-radius: 8px; border: 1px solid var(--color-border);"></div>
+                <p style="font-weight: 500; margin-top: 8px; color: var(--color-text-primary);">${color.name}</p>
+                <p style="font-size: 14px; color: var(--color-text-secondary); text-transform: uppercase;">${color.hex}</p>
+            </div>
+        `;
+
+        previewContainer.innerHTML = `
+            <div id="preview-area" style="padding: 24px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background-color: #fff; display: flex; flex-direction: column; gap: 32px;">
+                <section>
+                    <h2 style="font-size: 1.25rem; font-weight: 600; color: var(--color-text-primary); border-bottom: 2px solid var(--color-border); padding-bottom: 8px; margin-bottom: 16px;">Palette de Couleurs</h2>
+                    <div style="display: flex; flex-wrap: wrap; gap: 24px;">
+                        ${colorToSwatchHTML(palette.primary)}
+                        ${colorToSwatchHTML(palette.secondary)}
+                        ${colorToSwatchHTML(palette.accent)}
+                        ${colorToSwatchHTML(palette.neutrals.light)}
+                        ${colorToSwatchHTML(palette.neutrals.dark)}
+                    </div>
+                </section>
+                <section>
+                    <h2 style="font-size: 1.25rem; font-weight: 600; color: var(--color-text-primary); border-bottom: 2px solid var(--color-border); padding-bottom: 8px; margin-bottom: 16px;">Typographie</h2>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px;">
+                        <div>
+                            <p style="color: var(--color-text-secondary); margin-bottom: 4px;">Titres</p>
+                            <p style="font-family: ${typography.body.family}; font-weight: bold;">${typography.heading.family}</p>
+                            <h3 style="font-family: ${typography.heading.family}; font-weight: ${typography.heading.weight}; font-size: 2.5rem; color: ${palette.neutrals.dark.hex}; margin-bottom: 8px; line-height: 1.2;">Exemple de Titre</h3>
+                        </div>
+                        <div>
+                            <p style="color: var(--color-text-secondary); margin-bottom: 4px;">Corps de texte</p>
+                            <p style="font-family: ${typography.body.family}; font-weight: bold;">${typography.body.family}</p>
+                            <p style="font-family: ${typography.body.family}; font-weight: ${typography.body.weight}; font-size: 1rem; color: ${palette.neutrals.dark.hex}; line-height: 1.6;">
+                                Ceci est un paragraphe d'exemple. Il utilise la police de corps de texte pour vous donner un aperçu de la lisibilité et du style général pour les longs contenus.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        `;
+    };
+    
+    const updateUI = () => {
+        statusText.textContent = statusMessage;
+        allButtons.forEach(btn => btn.disabled = isLoading);
+        if (designSystem) {
+            exportContainer.style.display = 'flex';
+            renderDesignPreview(designSystem);
+        } else {
+            exportContainer.style.display = 'none';
+            previewContainer.innerHTML = '';
+        }
+    };
+    
+    // --- EVENT HANDLERS ---
+    const handlePremadeClick = () => {
+        isLoading = true;
+        statusMessage = "Génération d'un nouveau style...";
+        updateUI();
+        
+        setTimeout(() => {
+            const newSystem = getNextPreMadeSet();
+            designSystem = newSystem;
+            statusMessage = `Style "${newSystem.name}" généré.`;
+            isLoading = false;
+            updateUI();
+        }, 300);
+    };
+
+    const handleUploadClick = () => {
+        imageInput.click();
+    };
+
+    const handleImageChange = (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        isLoading = true;
+        statusMessage = "Analyse de l'image en cours...";
+        designSystem = null;
+        updateUI();
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const imageDataUrl = e.target?.result;
+                if(imageDataUrl) {
+                    const palette = await generatePaletteFromImage(imageDataUrl);
+                    const defaultTypography = getNextPreMadeSet(0).typography; 
+                    designSystem = {
+                        name: `Basé sur ${file.name}`,
+                        palette: palette,
+                        typography: defaultTypography,
+                    };
+                    statusMessage = "Palette de couleurs extraite de l'image.";
+                }
+            } catch (error) {
+                console.error("Error processing image:", error);
+                statusMessage = "Erreur lors de l'analyse de l'image.";
+            } finally {
+                isLoading = false;
+                updateUI();
+                imageInput.value = ""; 
+            }
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleExportClick = async () => {
+        if (!designSystem) return;
+        isLoading = true;
+        statusMessage = 'Création du PDF en cours...';
+        updateUI();
+        await generatePdf();
+        statusMessage = `Identité visuelle exportée.`;
+        isLoading = false;
+        updateUI();
+    };
+    
+    // --- INITIALIZATION ---
+    btnPremade.addEventListener('click', handlePremadeClick);
+    btnUpload.addEventListener('click', handleUploadClick);
+    imageInput.addEventListener('change', handleImageChange);
+    btnExport.addEventListener('click', handleExportClick);
+    
+    updateUI(); // Initial render
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

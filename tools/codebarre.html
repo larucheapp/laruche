@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Générateur de Code-Barres — La Ruche</title>
+  <meta name="description" content="Un outil simple et rapide pour générer des code-barres dans différents formats (CODE128, EAN-13, etc.) et les télécharger en format vectoriel SVG ou en planche PDF.">
+  
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    :root {
+      --color-bg: #FFFFFF;
+      --color-bg-alt: #F7F8FA;
+      --color-border: #E9EAF0;
+      --color-text-primary: #141417;
+      --color-text-secondary: #6B7280;
+      --color-violet: #7C3AED;
+      --color-violet-dark: #6D28D9;
+      --radius-md: 12px;
+      --radius-lg: 14px;
+      --tool-max-w: 480px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; background-color: var(--color-bg); }
+    body {
+      height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--color-text-primary); line-height: 1.5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    body[data-size="default"] { --tool-max-w: 480px; }
+    body[data-size="wide"] { --tool-max-w: 960px; } 
+    body[data-size="xl"] { --tool-max-w: 1200px; }
+
+    #bg-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; }
+
+    .app-header {
+      flex-shrink: 0; background: var(--color-bg-alt); border-bottom: 1px solid var(--color-border);
+      padding: 0 24px; display: flex; align-items: center; height: 70px;
+    }
+    .app-header a { display: inline-flex; align-items: center; }
+    .logo-img { height: 70px; width: auto; vertical-align: middle; }
+
+    .main-content {
+      flex-grow: 1; display: flex; 
+      align-items: flex-start; 
+      justify-content: center;
+      padding: 48px 24px; overflow-y: auto;
+    }
+    .tool-wrapper { display: flex; flex-direction: column; align-items: center; position: relative; }
+    .tool-title {
+      font-size: 1.75rem; font-weight: 600; padding: 12px 28px;
+      background: linear-gradient(45deg, var(--color-violet), var(--color-violet-dark));
+      color: #fff; border-radius: var(--radius-md); margin-bottom: -20px; position: relative; z-index: 5;
+      box-shadow: 0 4px 14px -4px rgba(124, 58, 237, .4);
+    }
+    .generator-card {
+      background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+      padding: 28px; padding-top: 40px; width: 100%; max-width: var(--tool-max-w);
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display: flex; flex-direction: column; gap: 24px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-label { font-weight: 500; color: var(--color-text-primary); }
+    .form-input, .form-select {
+      width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+      font-size: 1rem; color: var(--color-text-primary); background: var(--color-bg);
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .form-input:focus, .form-select:focus { outline: none; border-color: var(--color-violet); box-shadow: 0 0 0 3px rgba(124, 58, 237, .2); }
+    .form-select { appearance: none; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"); background-position: right .75rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem; }
+    .form-hint {
+        font-size: 13px;
+        color: var(--color-text-secondary);
+        margin-top: -4px;
+        min-height: 1.2em;
+    }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      font-weight: 500; padding: 10px 16px; border-radius: var(--radius-md); border: none; cursor: pointer;
+      transition: background-color .2s, box-shadow .2s, opacity .2s; font-size: 14px;
+      width: 100%;
+    }
+    .btn:focus-visible { outline: 2px solid transparent; outline-offset: 2px; box-shadow: 0 0 0 3px rgba(124, 58, 237, .4); }
+    .btn-primary { background: var(--color-violet); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--color-violet-dark); }
+    .btn-primary:disabled { background: #A78BFA; cursor: not-allowed; opacity: 0.8; }
+    
+    #result-container {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    #barcode-preview-wrapper {
+      background: white;
+      padding: 20px 30px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+      min-height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+    }
+    #barcode-preview { max-width: 100%; }
+    #error-message {
+      color: #EF4444; /* red-500 */
+      font-size: 14px;
+      font-weight: 500;
+      text-align: center;
+      min-height: 21px;
+    }
+    .download-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        width: 100%;
+    }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="default">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Générateur de Code-Barres</h1>
+      <div class="generator-card" role="region" aria-label="Générateur de Code-Barres">
+        <form id="barcode-form">
+          <div class="form-group">
+            <label for="barcode-data" class="form-label">Données</label>
+            <input type="text" id="barcode-data" class="form-input" placeholder="Saisissez le texte ou les chiffres" required>
+            <p id="input-hint" class="form-hint"></p>
+          </div>
+          <div class="form-group">
+            <label for="barcode-format" class="form-label">Format</label>
+            <select id="barcode-format" class="form-select">
+              <option value="CODE128">CODE128</option>
+              <option value="EAN13">EAN-13</option>
+              <option value="UPC">UPC</option>
+              <option value="CODE39">CODE39</option>
+              <option value="ITF">ITF-14</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top: 16px;">Générer</button>
+        </form>
+
+        <div id="result-container">
+          <div id="barcode-preview-wrapper">
+            <svg id="barcode-preview"></svg>
+          </div>
+          <div id="error-message"></div>
+          <div class="download-actions">
+            <button id="download-btn" class="btn btn-primary">Télécharger (.svg)</button>
+            <button id="download-pdf-btn" class="btn btn-primary">Exporter Planche (.pdf)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const barcodeForm = document.getElementById('barcode-form');
+    const dataInput = document.getElementById('barcode-data');
+    const formatSelect = document.getElementById('barcode-format');
+    const resultContainer = document.getElementById('result-container');
+    const barcodePreview = document.getElementById('barcode-preview');
+    const downloadBtn = document.getElementById('download-btn');
+    const downloadPdfBtn = document.getElementById('download-pdf-btn');
+    const errorMessage = document.getElementById('error-message');
+    const inputHint = document.getElementById('input-hint');
+
+    const formatRules = {
+      CODE128: { placeholder: 'Saisissez texte ou chiffres', hint: 'Tous les caractères sont autorisés.', inputmode: 'text', pattern: null },
+      EAN13: { placeholder: 'Ex: 400638133393', hint: 'Doit contenir exactement 12 chiffres.', inputmode: 'numeric', pattern: '\\d{12}' },
+      UPC: { placeholder: 'Ex: 03600029145', hint: 'Doit contenir exactement 11 chiffres.', inputmode: 'numeric', pattern: '\\d{11}' },
+      CODE39: { placeholder: 'Ex: HELLO-WORLD-123', hint: 'Lettres majuscules, chiffres, et - . $ / + %', inputmode: 'text', pattern: null },
+      ITF: { placeholder: 'Ex: 123456789012', hint: 'Chiffres uniquement, nombre pair de caractères.', inputmode: 'numeric', pattern: '(\\d{2})+' }
+    };
+
+    function updateUIForFormat(format) {
+      const rule = formatRules[format];
+      if (rule) {
+        dataInput.placeholder = rule.placeholder;
+        inputHint.textContent = rule.hint;
+        dataInput.inputmode = rule.inputmode;
+        if (rule.pattern) dataInput.setAttribute('pattern', rule.pattern);
+        else dataInput.removeAttribute('pattern');
+      }
+    }
+
+    formatSelect.addEventListener('change', (e) => {
+      updateUIForFormat(e.target.value);
+      resultContainer.style.display = 'none';
+      errorMessage.textContent = '';
+      dataInput.value = '';
+    });
+
+    barcodeForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      let data = dataInput.value.trim();
+      const format = formatSelect.value;
+
+      if (format === 'CODE39') data = data.toUpperCase();
+      errorMessage.textContent = '';
+      
+      if (!data) {
+        errorMessage.textContent = 'Veuillez saisir des données.';
+        resultContainer.style.display = 'none';
+        return;
+      }
+      
+      try {
+        JsBarcode(barcodePreview, data, {
+          format: format, lineColor: "#141417", width: 2, height: 80,
+          displayValue: true, fontOptions: "600", fontSize: 16,
+        });
+        resultContainer.style.display = 'flex';
+        errorMessage.textContent = '';
+      } catch (error) {
+        resultContainer.style.display = 'none';
+        let friendlyMessage = 'Erreur : Données invalides pour ce format.';
+        const rule = formatRules[format];
+        if (rule && rule.hint) friendlyMessage = `Erreur. ${rule.hint}`;
+        if(format === 'EAN13' && error.message.includes("checksum")) friendlyMessage = "La clé de contrôle est invalide. Entrez 12 chiffres, la 13ème sera calculée.";
+        errorMessage.textContent = friendlyMessage;
+        console.error(error);
+      }
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      const serializer = new XMLSerializer();
+      const svgString = serializer.serializeToString(barcodePreview);
+      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `code-barres-${dataInput.value.trim().replace(/[^a-z0-9]/gi, '_')}.svg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    });
+
+    downloadPdfBtn.addEventListener('click', () => {
+      if (typeof window.jspdf === 'undefined') {
+          console.error("jsPDF library is not loaded.");
+          errorMessage.textContent = "Erreur : La librairie PDF n'a pas pu être chargée.";
+          return;
+      }
+    
+      const originalButtonText = downloadPdfBtn.textContent;
+      downloadPdfBtn.disabled = true;
+      downloadPdfBtn.textContent = 'Génération...';
+      errorMessage.textContent = '';
+
+      try {
+        const svgElement = document.getElementById('barcode-preview');
+        const serializer = new XMLSerializer();
+        const svgString = serializer.serializeToString(svgElement);
+        const svgWidthPx = parseFloat(svgElement.getAttribute('width'));
+        const svgHeightPx = parseFloat(svgElement.getAttribute('height'));
+
+        if (!svgWidthPx || !svgHeightPx) {
+            throw new Error("Impossible de déterminer les dimensions du code-barres.");
+        }
+
+        const img = new Image();
+        const svgBlob = new Blob([svgString], {type: 'image/svg+xml;charset=utf-8'});
+        const url = URL.createObjectURL(svgBlob);
+
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+
+            const canvas = document.createElement('canvas');
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = svgWidthPx * dpr;
+            canvas.height = svgHeightPx * dpr;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+            ctx.drawImage(img, 0, 0);
+            
+            const pngDataUrl = canvas.toDataURL('image/png');
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+            
+            const pxToMm = 25.4 / 96;
+            const svgWidthMm = svgWidthPx * pxToMm;
+            const svgHeightMm = svgHeightPx * pxToMm;
+
+            const pageW = 210, pageH = 297, margin = 10, gapX = 4, gapY = 4;
+            const effectiveW = pageW - 2 * margin, effectiveH = pageH - 2 * margin;
+
+            if (svgWidthMm > effectiveW || svgHeightMm > effectiveH) {
+              throw new Error("Le code-barres est trop grand pour une page A4.");
+            }
+
+            const cols = Math.floor((effectiveW + gapX) / (svgWidthMm + gapX));
+            const rows = Math.floor((effectiveH + gapY) / (svgHeightMm + gapY));
+
+            const totalGridWidth = cols * svgWidthMm + (cols - 1) * gapX;
+            const totalGridHeight = rows * svgHeightMm + (rows - 1) * gapY;
+            const startX = (pageW - totalGridWidth) / 2;
+            const startY = (pageH - totalGridHeight) / 2;
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const x = startX + c * (svgWidthMm + gapX);
+                    const y = startY + r * (svgHeightMm + gapY);
+                    doc.addImage(pngDataUrl, 'PNG', x, y, svgWidthMm, svgHeightMm);
+                }
+            }
+            
+            const dataValue = dataInput.value.trim().replace(/[^a-z0-9]/gi, '_') || 'code-barres';
+            doc.save(`planche-${dataValue}.pdf`);
+
+            downloadPdfBtn.disabled = false;
+            downloadPdfBtn.textContent = originalButtonText;
+        };
+
+        img.onerror = (e) => {
+            URL.revokeObjectURL(url);
+            console.error("Image loading error:", e);
+            throw new Error("Erreur lors de la conversion du SVG en image.");
+        };
+        
+        img.src = url;
+
+      } catch (error) {
+          console.error("PDF Generation Error:", error);
+          errorMessage.textContent = `Erreur : ${error.message}`;
+          downloadPdfBtn.disabled = false;
+          downloadPdfBtn.textContent = originalButtonText;
+      }
+    });
+    
+    updateUIForFormat(formatSelect.value);
+
+    // Background hex grid — NE PAS MODIFIER
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+        const size = 24, hexW = 2 * size, hexH = Math.sqrt(3) * size, stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)';
+        ctx.lineWidth = 1;
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX, y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i, px = x + size * Math.cos(a), py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

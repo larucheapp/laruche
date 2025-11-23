@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Générateur de Signature E-mail — La Ruche</title>
+  <meta name="description" content="Créez une signature e-mail professionnelle et élégante en quelques clics. Mettez à jour en direct et copiez le code HTML compatible avec tous les clients e-mail.">
+  
+  <style>
+    :root {
+      --color-bg: #FFFFFF;
+      --color-bg-alt: #F7F8FA;
+      --color-border: #E9EAF0;
+      --color-text-primary: #141417;
+      --color-text-secondary: #6B7280;
+      --color-violet: #7C3AED;
+      --color-violet-dark: #6D28D9;
+      --radius-md: 12px;
+      --radius-lg: 14px;
+      --tool-max-w: 480px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; background-color: var(--color-bg); }
+    body {
+      height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--color-text-primary); line-height: 1.5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    body[data-size="default"] { --tool-max-w: 480px; }
+    body[data-size="wide"] { --tool-max-w: 960px; } 
+    body[data-size="xl"] { --tool-max-w: 1200px; }
+
+    #bg-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; }
+
+    .app-header {
+      flex-shrink: 0; background: var(--color-bg-alt); border-bottom: 1px solid var(--color-border);
+      padding: 0 24px; display: flex; align-items: center; height: 70px;
+    }
+    .app-header a { display: inline-flex; align-items: center; }
+    .logo-img { height: 70px; width: auto; vertical-align: middle; }
+
+    .main-content {
+      flex-grow: 1; display: flex; 
+      align-items: flex-start; /* FIX: Aligns tool to the top */
+      justify-content: center;
+      padding: 48px 24px; overflow-y: auto;
+    }
+    .tool-wrapper { display: flex; flex-direction: column; align-items: center; position: relative; width:100%; }
+    .tool-title {
+      font-size: 1.75rem; font-weight: 600; padding: 12px 28px;
+      background: linear-gradient(45deg, var(--color-violet), var(--color-violet-dark));
+      color: #fff; border-radius: var(--radius-md); margin-bottom: -20px; position: relative; z-index: 5;
+      box-shadow: 0 4px 14px -4px rgba(124, 58, 237, .4);
+    }
+    .generator-card {
+      background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+      padding: 28px; padding-top: 40px; width: 100%; max-width: var(--tool-max-w);
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display: flex; flex-direction: column; gap: 24px;
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-label { font-weight: 500; color: var(--color-text-primary); }
+    .form-input {
+      width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+      font-size: 1rem; color: var(--color-text-primary); background: var(--color-bg);
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .form-input:focus { outline: none; border-color: var(--color-violet); box-shadow: 0 0 0 3px rgba(124, 58, 237, .2); }
+    
+    .actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      font-weight: 500; padding: 10px 16px; border-radius: var(--radius-md); border: none; cursor:pointer;
+      transition: background-color .2s, box-shadow .2s; font-size: 14px;
+    }
+    .btn:focus-visible { outline: 2px solid transparent; outline-offset: 2px; box-shadow: 0 0 0 3px rgba(124, 58, 237, .4); }
+    .btn-primary { background: var(--color-violet); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--color-violet-dark); }
+    .btn-primary:disabled { background: #A78BFA; cursor: not-allowed; }
+
+    /* --- STYLES SPÉCIFIQUES --- */
+    .signature-tool {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      width: 100%;
+    }
+    #signature-form { display: flex; flex-direction: column; gap: 16px; }
+    #preview-wrapper { display: flex; flex-direction: column; gap: 16px; }
+    #preview-wrapper h3 {
+      font-size: 1.125rem; font-weight: 600; color: var(--color-text-primary);
+      margin: 0; padding-bottom: 12px; border-bottom: 1px solid var(--color-border);
+    }
+    #signature-preview {
+      background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: var(--radius-md);
+      padding: 20px; min-height: 200px; font-family: Arial, sans-serif;
+      font-size: 12px; color: #222222; overflow: auto;
+    }
+    #copy-status {
+      font-size: 14px; color: var(--color-violet); min-height: 21px;
+      font-weight: 500; opacity: 0; transition: opacity .3s ease;
+      flex-grow: 1; text-align: right;
+    }
+    
+    /* --- Template Selector --- */
+    .template-selector { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .template-option { position: relative; cursor: pointer; }
+    .template-option input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
+    .template-preview-box {
+      border: 2px solid var(--color-border); border-radius: var(--radius-md);
+      background-color: var(--color-bg-alt); transition: border-color .2s, box-shadow .2s;
+      display: flex; flex-direction: column; padding: 12px; gap: 8px;
+    }
+    .template-option input[type="radio"]:checked + .template-preview-box {
+      border-color: var(--color-violet);
+      box-shadow: 0 0 0 3px rgba(124, 58, 237, .2);
+    }
+    .template-option:hover .template-preview-box { border-color: #A78BFA; }
+    .template-preview-box span { font-size: 12px; font-weight: 500; text-align: center; }
+    .template-preview-visual { flex-grow: 1; border-radius: 4px; background: #fff; padding: 8px; }
+    
+    /* Visuals for previews */
+    .preview-classic { display: flex; align-items: center; gap: 8px;}
+    .preview-classic .bar { width: 3px; height: 32px; background: var(--color-violet); border-radius: 2px;}
+    .preview-classic .text { display: flex; flex-direction: column; gap: 4px; flex-grow: 1; }
+    .preview-classic .text div { height: 5px; background: #D1D5DB; border-radius: 2px; }
+    .preview-classic .l1 { width: 60%; } .preview-classic .l2 { width: 80%; } .preview-classic .l3 { width: 70%; }
+    
+    .preview-modern { display: flex; align-items: center; gap: 8px;}
+    .preview-modern .circle { width: 28px; height: 28px; background: #D1D5DB; border-radius: 50%; flex-shrink: 0;}
+    .preview-modern .text { display: flex; flex-direction: column; gap: 4px; flex-grow: 1;}
+    .preview-modern .text div { height: 5px; background: #D1D5DB; border-radius: 2px; }
+    .preview-modern .l1 { width: 70%; background: var(--color-violet); } .preview-modern .l2 { width: 90%; } .preview-modern .l3 { width: 80%; }
+
+    .preview-minimalist { display: flex; flex-direction: column; justify-content: center; gap: 4px;}
+    .preview-minimalist div { height: 5px; background: #D1D5DB; border-radius: 2px; }
+    .preview-minimalist .l1 { width: 60%; background: var(--color-violet); }
+    .preview-minimalist .l2 { width: 80%; }
+    .preview-minimalist .sep { height: 1px; background: var(--color-border); margin: 4px 0;}
+    .preview-minimalist .l3 { width: 90%; }
+
+    @media (max-width: 820px) {
+      .signature-tool { grid-template-columns: 1fr; }
+    }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="wide">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Générateur de Signature E-mail</h1>
+      
+      <div class="generator-card" role="region" aria-label="Générateur de Signature E-mail">
+        <div class="signature-tool">
+          <div id="signature-form">
+            <div class="form-group">
+              <label class="form-label">Choisissez un modèle</label>
+              <div class="template-selector">
+                <label class="template-option">
+                  <input type="radio" name="template" value="classic" checked>
+                  <div class="template-preview-box">
+                    <div class="template-preview-visual preview-classic">
+                      <div class="bar"></div>
+                      <div class="text">
+                        <div class="l1"></div><div class="l2"></div><div class="l3"></div>
+                      </div>
+                    </div>
+                    <span>Classique</span>
+                  </div>
+                </label>
+                <label class="template-option">
+                  <input type="radio" name="template" value="modern">
+                  <div class="template-preview-box">
+                    <div class="template-preview-visual preview-modern">
+                      <div class="circle"></div>
+                      <div class="text">
+                        <div class="l1"></div><div class="l2"></div><div class="l3"></div>
+                      </div>
+                    </div>
+                    <span>Moderne</span>
+                  </div>
+                </label>
+                <label class="template-option">
+                  <input type="radio" name="template" value="minimalist">
+                  <div class="template-preview-box">
+                    <div class="template-preview-visual preview-minimalist">
+                      <div class="l1"></div><div class="l2"></div><div class="sep"></div><div class="l3"></div>
+                    </div>
+                    <span>Minimaliste</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="name" class="form-label">Nom complet</label>
+              <input type="text" id="name" class="form-input" placeholder="Ex: Jean Dupont">
+            </div>
+            <div class="form-group">
+              <label for="title" class="form-label">Poste / Fonction</label>
+              <input type="text" id="title" class="form-input" placeholder="Ex: Directeur Marketing">
+            </div>
+            <div class="form-group">
+              <label for="company" class="form-label">Entreprise</label>
+              <input type="text" id="company" class="form-input" placeholder="Ex: La Ruche Créative">
+            </div>
+            <div class="form-group">
+              <label for="phone" class="form-label">Téléphone</label>
+              <input type="tel" id="phone" class="form-input" placeholder="Ex: 06 12 34 56 78">
+            </div>
+             <div class="form-group">
+              <label for="email" class="form-label">Adresse e-mail</label>
+              <input type="email" id="email" class="form-input" placeholder="Ex: jean.dupont@email.com">
+            </div>
+            <div class="form-group">
+              <label for="website" class="form-label">Site web</label>
+              <input type="url" id="website" class="form-input" placeholder="Ex: https://www.laruche.fr">
+            </div>
+            <div class="form-group">
+              <label for="image" class="form-label">URL de votre logo/photo</label>
+              <input type="url" id="image" class="form-input" placeholder="Lien direct vers une image (https)">
+            </div>
+          </div>
+          <div id="preview-wrapper">
+            <h3>Aperçu en direct</h3>
+            <div id="signature-preview"></div>
+            <div class="actions">
+               <p id="copy-status"></p>
+               <button id="copy-btn" class="btn btn-primary">Copier la signature</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const inputs = document.querySelectorAll('.form-input');
+      const templateRadios = document.querySelectorAll('input[name="template"]');
+      const preview = document.getElementById('signature-preview');
+      const copyBtn = document.getElementById('copy-btn');
+      const copyStatus = document.getElementById('copy-status');
+      
+      const getSignatureData = () => ({
+        name: document.getElementById('name').value,
+        title: document.getElementById('title').value,
+        company: document.getElementById('company').value,
+        phone: document.getElementById('phone').value,
+        email: document.getElementById('email').value,
+        website: document.getElementById('website').value,
+        image: document.getElementById('image').value,
+      });
+
+      const generateClassicSignature = (data) => `
+        <table cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; color: #222222;">
+          <tbody>
+            <tr>
+              ${data.image ? `<td style="padding-right: 12px; vertical-align: top;"><img src="${data.image}" alt="Logo" width="80" style="max-width: 80px; border-radius: 4px;"></td>` : ''}
+              <td style="border-left: 2px solid #7C3AED; padding-left: 12px; vertical-align: top;">
+                <p style="margin: 0 0 4px 0;"><strong style="font-size: 14px; color: #141417; font-weight: bold;">${data.name || 'Votre Nom'}</strong></p>
+                ${data.title ? `<p style="margin: 0 0 8px 0; color: #6B7280;">${data.title}</p>` : ''}
+                ${data.company ? `<p style="margin: 0 0 2px 0; font-weight: bold; color: #4A5568;">${data.company}</p>` : ''}
+                ${data.phone ? `<p style="margin: 0 0 2px 0;"><strong style="color: #7C3AED;">T:</strong> <a href="tel:${data.phone}" style="color: #6B7280; text-decoration: none;">${data.phone}</a></p>` : ''}
+                ${data.email ? `<p style="margin: 0 0 2px 0;"><strong style="color: #7C3AED;">E:</strong> <a href="mailto:${data.email}" style="color: #6B7280; text-decoration: none;">${data.email}</a></p>` : ''}
+                ${data.website ? `<p style="margin: 0;"><strong style="color: #7C3AED;">W:</strong> <a href="${data.website}" target="_blank" style="color: #6B7280; text-decoration: none;">${data.website}</a></p>` : ''}
+              </td>
+            </tr>
+          </tbody>
+        </table>`;
+      
+      const generateModernSignature = (data) => `
+        <table cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; color: #222222; min-width: 320px;">
+          <tbody>
+            <tr>
+              ${data.image ? `<td style="padding-right: 15px; vertical-align: middle; width: 80px;"><img src="${data.image}" alt="Logo" width="80" height="80" style="width: 80px; height: 80px; border-radius: 50%;"></td>` : ''}
+              <td style="vertical-align: middle;">
+                <p style="margin: 0 0 2px 0;"><strong style="font-size: 16px; color: #141417; font-weight: bold;">${data.name || 'Votre Nom'}</strong></p>
+                ${data.title ? `<p style="margin: 0 0 10px 0; color: #7C3AED; font-weight: 500;">${data.title}</p>` : ''}
+                <div style="border-top: 1px solid #E9EAF0; padding-top: 8px;">
+                  ${data.company ? `<p style="margin: 0 0 2px 0; font-weight: bold; color: #4A5568;">${data.company}</p>` : ''}
+                  ${data.phone ? `<p style="margin: 0 0 2px 0;"><strong style="color: #6B7280;">Tél:</strong> <a href="tel:${data.phone}" style="color: #6B7280; text-decoration: none;">${data.phone}</a></p>` : ''}
+                  ${data.email ? `<p style="margin: 0 0 2px 0;"><strong style="color: #6B7280;">Mail:</strong> <a href="mailto:${data.email}" style="color: #6B7280; text-decoration: none;">${data.email}</a></p>` : ''}
+                  ${data.website ? `<p style="margin: 0;"><strong style="color: #6B7280;">Web:</strong> <a href="${data.website}" target="_blank" style="color: #6B7280; text-decoration: none;">${data.website}</a></p>` : ''}
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>`;
+
+      const generateMinimalistSignature = (data) => `
+        <table cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; color: #222222;">
+          <tbody>
+              <tr><td style="padding-bottom: 5px;"><strong style="font-size: 14px; color: #141417; font-weight: bold;">${data.name || 'Votre Nom'}</strong></td></tr>
+              ${data.title ? `<tr><td style="padding-bottom: 10px; color: #6B7280;">${data.title}</td></tr>` : ''}
+              <tr><td style="border-top: 1px solid #E9EAF0; padding-top: 10px;">
+                  ${data.company ? `<p style="margin: 0 0 4px 0; font-weight: bold; color: #4A5568;">${data.company}</p>` : ''}
+                  <p style="margin: 0;">
+                    ${data.phone ? `<a href="tel:${data.phone}" style="color: #6B7280; text-decoration: none;">${data.phone}</a>` : ''}
+                    ${data.phone && data.email ? `<span style="color: #E0E0E0;">&nbsp;&nbsp;|&nbsp;&nbsp;</span>` : ''}
+                    ${data.email ? `<a href="mailto:${data.email}" style="color: #6B7280; text-decoration: none;">${data.email}</a>` : ''}
+                  </p>
+                  ${data.website ? `<p style="margin: 4px 0 0 0;"><a href="${data.website}" target="_blank" style="color: #7C3AED; text-decoration: none; font-weight: bold;">${data.website.replace(/^(https?:\/\/)?(www\.)?/, '')}</a></p>` : ''}
+              </td></tr>
+              ${data.image ? `<tr><td style="padding-top: 12px;"><img src="${data.image}" alt="Logo" width="100" style="max-width: 100px;"></td></tr>` : ''}
+          </tbody>
+        </table>`;
+
+      const updatePreview = () => {
+        const data = getSignatureData();
+        const selectedTemplate = document.querySelector('input[name="template"]:checked').value;
+        let signatureHTML = '';
+
+        switch(selectedTemplate) {
+          case 'modern':
+            signatureHTML = generateModernSignature(data);
+            break;
+          case 'minimalist':
+            signatureHTML = generateMinimalistSignature(data);
+            break;
+          case 'classic':
+          default:
+            signatureHTML = generateClassicSignature(data);
+            break;
+        }
+        preview.innerHTML = signatureHTML;
+      };
+
+      inputs.forEach(input => input.addEventListener('input', updatePreview));
+      templateRadios.forEach(radio => radio.addEventListener('change', updatePreview));
+
+      copyBtn.addEventListener('click', async () => {
+        try {
+          const htmlContent = preview.innerHTML;
+          const blob = new Blob([htmlContent], { type: 'text/html' });
+          const clipboardItem = new ClipboardItem({ 'text/html': blob });
+          await navigator.clipboard.write([clipboardItem]);
+          
+          copyStatus.textContent = 'Copié dans le presse-papiers !';
+          copyStatus.style.opacity = '1';
+          setTimeout(() => { copyStatus.style.opacity = '0'; }, 2000);
+
+        } catch (err) {
+          console.error('Erreur de copie:', err);
+          copyStatus.textContent = 'Erreur de copie';
+          copyStatus.style.opacity = '1';
+           setTimeout(() => { copyStatus.style.opacity = '0'; }, 2000);
+        }
+      });
+
+      // Initial render
+      updatePreview();
+    });
+
+    // Background hex grid — NE PAS MODIFIER
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+        const size = 24, hexW = 2 * size, hexH = Math.sqrt(3) * size, stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)';
+        ctx.lineWidth = 1;
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX, y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i, px = x + size * Math.cos(a), py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

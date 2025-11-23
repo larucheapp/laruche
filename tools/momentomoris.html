@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memento Mori Generator</title>
+    <meta name="description" content="Générez un PDF Memento Mori pour visualiser les semaines de votre vie.">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --color-bg: #FFFFFF;
+            --color-bg-alt: #F7F8FA;
+            --color-border: #E9EAF0;
+            --color-text-primary: #141417;
+            --color-text-secondary: #6B7280;
+            --color-violet: #7C3AED;
+            --color-violet-dark: #6D28D9;
+            --radius-md: 12px;
+            --radius-lg: 14px;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            height: 100%;
+            background-color: var(--color-bg);
+        }
+
+        body {
+            height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+            color: var(--color-text-primary);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+
+        .app-header {
+            flex-shrink: 0;
+            background-color: var(--color-bg-alt);
+            border-bottom: 1px solid var(--color-border);
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            height: 70px;
+        }
+
+        .app-header a {
+            display: inline-flex;
+            align-items: center;
+        }
+        
+        .logo-img {
+            height: 70px;
+            width: auto;
+            vertical-align: middle;
+        }
+
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 48px 24px;
+            overflow-y: auto;
+        }
+        
+        .tool-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+        
+        .tool-title {
+            font-size: 1.75rem;
+            font-weight: 600;
+            padding: 12px 28px;
+            background: linear-gradient(45deg, var(--color-violet), var(--color-violet-dark));
+            color: white;
+            border-radius: var(--radius-md);
+            margin-bottom: -20px;
+            position: relative;
+            z-index: 5;
+            box-shadow: 0 4px 14px -4px rgba(124, 58, 237, 0.4);
+        }
+
+        .generator-card {
+            background-color: var(--color-bg);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+            width: 100%;
+            max-width: 480px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            padding-top: 40px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-label {
+            font-weight: 500;
+            color: var(--color-text-primary);
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            font-size: 1rem;
+            color: var(--color-text-primary);
+            background-color: var(--color-bg);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--color-violet);
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
+        }
+        
+        .actions {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-weight: 500;
+            padding: 10px 16px;
+            border-radius: var(--radius-md);
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s, box-shadow 0.2s;
+            font-size: 14px;
+        }
+
+        .btn:focus-visible {
+            outline: 2px solid transparent;
+            outline-offset: 2px;
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.4);
+        }
+
+        .btn-primary {
+            background-color: var(--color-violet);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: var(--color-violet-dark);
+        }
+
+        .btn-primary:disabled {
+            background-color: #A78BFA;
+            cursor: not-allowed;
+        }
+        
+        .status-text {
+            font-size: 14px;
+            color: var(--color-text-secondary);
+            text-align: center;
+            min-height: 21px;
+        }
+    </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <canvas id="bg-canvas"></canvas>
+
+    <header class="app-header">
+        <a href="index.html" aria-label="Accueil">
+            <!-- Correction : logo.png pour respecter la norme -->
+            <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+        </a>
+    </header>
+
+    <main class="main-content">
+        <div class="tool-wrapper">
+             <h1 class="tool-title">Memento Mori</h1>
+            <div class="generator-card">
+                <div class="form-group">
+                    <label for="birthdate-input" class="form-label">Votre Date de Naissance</label>
+                    <input type="date" id="birthdate-input" class="form-input">
+                </div>
+                
+                <div class="actions">
+                    <button id="generate-btn" class="btn btn-primary" disabled>
+                        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        Générer mon PDF
+                    </button>
+                </div>
+                <div class="status-text" id="status-text" role="status" aria-live="polite"></div>
+            </div>
+        </div>
+    </main>
+
+    <script defer>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Elements ---
+            const birthdateInput = document.getElementById('birthdate-input');
+            const generateBtn = document.getElementById('generate-btn');
+            const statusText = document.getElementById('status-text');
+            const bgCanvas = document.getElementById('bg-canvas');
+            const bgCtx = bgCanvas.getContext('2d');
+            const { jsPDF } = window.jspdf;
+
+            // --- Background Canvas ---
+            const drawHexGrid = () => {
+                const dpr = window.devicePixelRatio || 1;
+                const rect = bgCanvas.getBoundingClientRect();
+                bgCanvas.width = rect.width * dpr;
+                bgCanvas.height = rect.height * dpr;
+                bgCtx.scale(dpr, dpr);
+
+                const size = 24;
+                const hexWidth = 2 * size;
+                const hexHeight = Math.sqrt(3) * size;
+                const horizDist = hexWidth * 3/4;
+                
+                bgCtx.strokeStyle = 'rgba(124, 58, 237, 0.1)';
+                bgCtx.lineWidth = 1;
+
+                for (let row = 0; row * hexHeight < rect.height + hexHeight; row++) {
+                    for (let col = 0; col * horizDist < rect.width + hexWidth; col++) {
+                        const x = col * horizDist;
+                        const y = row * hexHeight + (col % 2 === 1 ? hexHeight / 2 : 0);
+                        
+                        bgCtx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            const angle = 2 * Math.PI / 6 * i;
+                            const px = x + size * Math.cos(angle);
+                            const py = y + size * Math.sin(angle);
+                            if (i === 0) bgCtx.moveTo(px, py);
+                            else bgCtx.lineTo(px, py);
+                        }
+                        bgCtx.closePath();
+                        bgCtx.stroke();
+                    }
+                }
+            };
+            
+            window.addEventListener('resize', drawHexGrid);
+            drawHexGrid();
+
+            // --- UI Logic ---
+            birthdateInput.addEventListener('input', () => {
+                const birthDate = new Date(birthdateInput.value);
+                const today = new Date();
+                today.setHours(0,0,0,0); // Compare dates only
+
+                if (birthdateInput.value && birthDate < today) {
+                    generateBtn.disabled = false;
+                    statusText.textContent = '';
+                } else {
+                    generateBtn.disabled = true;
+                    if (birthdateInput.value) {
+                       statusText.textContent = 'Veuillez entrer une date de naissance passée.';
+                    }
+                }
+            });
+
+            // --- PDF Generation ---
+            generateBtn.addEventListener('click', async () => {
+                const birthDate = new Date(birthdateInput.value);
+                if (isNaN(birthDate.getTime())) return;
+
+                generateBtn.disabled = true;
+                statusText.textContent = 'Génération du PDF...';
+                
+                const loadImageData = (url) => {
+                    return new Promise(async (resolve, reject) => {
+                        try {
+                            const response = await fetch(url);
+                            if (!response.ok) throw new Error('Network response was not ok');
+                            const blob = await response.blob();
+                            const reader = new FileReader();
+                            const img = new Image();
+
+                            reader.onloadend = () => {
+                                img.src = reader.result;
+                                img.onload = () => {
+                                    resolve({
+                                        base64: reader.result,
+                                        width: img.naturalWidth,
+                                        height: img.naturalHeight
+                                    });
+                                };
+                                img.onerror = (err) => reject(new Error('Image could not be loaded.'));
+                            };
+                            reader.onerror = (err) => reject(new Error('FileReader failed.'));
+                            reader.readAsDataURL(blob);
+                        } catch (err) {
+                            reject(err);
+                        }
+                    });
+                };
+
+                try {
+                    const doc = new jsPDF({ orientation: 'landscape' });
+                    const violetColor = '#7C3AED';
+                    const textColorPrimary = '#141417';
+                    const textColorSecondary = '#6B7280';
+                    const borderColor = '#E9EAF0';
+                    const pageW = doc.internal.pageSize.getWidth();
+                    const pageH = doc.internal.pageSize.getHeight();
+
+                    // --- Correction clé : Essayer de charger le logo, mais ne pas bloquer si échec ---
+                    let logoData = null;
+                    try {
+                        logoData = await loadImageData('logo.png');
+                    } catch (e) {
+                        console.warn("Logo introuvable ou bloqué par sécurité locale (CORS). Génération sans logo.", e);
+                    }
+                    
+                    const logoWidth = 40;
+                    // Calcul hauteur si logo existe, sinon valeur par défaut pour layout
+                    const logoHeight = (logoData && logoData.width > 0) ? (logoData.height / logoData.width) * logoWidth : 10; 
+                    
+                    // --- PDF Content ---
+                    // --- PAGE 1 ---
+                    
+                    // Header
+                    if (logoData) {
+                        doc.addImage(logoData.base64, 'PNG', 15, 12, logoWidth, logoHeight);
+                    }
+                    
+                    // Ajustement position texte si pas de logo
+                    const headerTextY = 12 + logoHeight / 2;
+                    const textX = 15 + logoWidth + 10;
+
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(violetColor);
+                    doc.setFontSize(20);
+                    doc.text('Memento Mori', textX, headerTextY, { baseline: 'middle'});
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(10);
+                    doc.setTextColor(textColorSecondary);
+                    doc.text('Votre calendrier de vie, semaine par semaine.', textX, headerTextY + 7, { baseline: 'middle'});
+
+                    // Stats Dashboard
+                    const today = new Date();
+                    const weeksLived = Math.floor((today - birthDate) / (1000 * 60 * 60 * 24 * 7));
+                    const totalWeeksInLife = 5200; // 100 years * 52 weeks
+                    const weeksLeft = totalWeeksInLife - weeksLived;
+                    const percentageLived = (weeksLived / totalWeeksInLife) * 100;
+
+                    const dashboardY = 42;
+                    const dashboardH = 30;
+                    doc.setFillColor('#F7F8FA');
+                    doc.setDrawColor(borderColor);
+                    doc.roundedRect(15, dashboardY, pageW - 30, dashboardH, 3, 3, 'FD');
+
+                    // Stat Cards
+                    const cardWidth = (pageW - 40) / 3;
+                    const textY = dashboardY + 12;
+                    const valueY = dashboardY + 21;
+                    
+                    doc.setFontSize(9);
+                    doc.setTextColor(textColorSecondary);
+                    doc.text('SEMAINES VÉCUES', 15 + cardWidth / 2, textY, { align: 'center' });
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(16);
+                    doc.setTextColor(textColorPrimary);
+                    doc.text(weeksLived.toString(), 15 + cardWidth / 2, valueY, { align: 'center' });
+                    
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(9);
+                    doc.setTextColor(textColorSecondary);
+                    doc.text('SEMAINES RESTANTES (est.)', 15 + cardWidth * 1.5, textY, { align: 'center' });
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(16);
+                    doc.setTextColor(textColorPrimary);
+                    doc.text(weeksLeft.toString(), 15 + cardWidth * 1.5, valueY, { align: 'center' });
+                    
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(9);
+                    doc.setTextColor(textColorSecondary);
+                    doc.text('% DE VIE ÉCOULÉ (est.)', 15 + cardWidth * 2.5, textY, { align: 'center' });
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(16);
+                    doc.setTextColor(textColorPrimary);
+                    doc.text(`${percentageLived.toFixed(2)}%`, 15 + cardWidth * 2.5, valueY, { align: 'center' });
+
+                    // Progress bar
+                    const progressY = dashboardY + dashboardH + 5;
+                    const progressW = pageW - 30;
+                    doc.setDrawColor(borderColor);
+                    doc.rect(15, progressY, progressW, 4, 'S');
+                    doc.setFillColor(violetColor);
+                    doc.rect(15, progressY, progressW * (percentageLived/100), 4, 'F');
+
+
+                    // --- Life Calendar Grid ---
+                    const boxSize = 1.8;
+                    const gap = 0.4;
+                    const cols = 52;
+                    const gridWidth = cols * (boxSize + gap);
+                    
+                    const drawGrid = (startWeek, endWeek, startX, startY) => {
+                        for (let i = startWeek; i <= endWeek; i++) {
+                            const relativeWeekTotal = i - startWeek;
+                            const row = Math.floor(relativeWeekTotal / cols);
+                            const col = relativeWeekTotal % cols;
+                            const x = startX + col * (boxSize + gap);
+                            const y = startY + row * (boxSize + gap);
+                            
+                            doc.setLineWidth(0.15);
+                            if (i <= weeksLived) {
+                                doc.setFillColor(violetColor);
+                                doc.rect(x, y, boxSize, boxSize, 'F');
+                            } else {
+                                doc.setDrawColor(violetColor);
+                                doc.rect(x, y, boxSize, boxSize, 'S');
+                            }
+                        }
+                    };
+                    
+                    const drawYearMarkers = (startYear, endYear, startX, startY) => {
+                        doc.setFontSize(7);
+                        doc.setTextColor(textColorSecondary);
+                        for (let year = startYear; year <= endYear; year++) {
+                            if (year === 1 || year % 5 === 0) {
+                                 const y = startY + (year - startYear) * (boxSize + gap) + (boxSize / 2);
+                                 doc.text(`An ${year}`, startX - 5, y, { align: 'right', baseline: 'middle'});
+                            }
+                        }
+                    };
+                    
+                    // Page 1: Years 1-50
+                    const grid1StartY = progressY + 15;
+                    const grid1StartX = (pageW - gridWidth) / 2;
+                    drawGrid(1, 2600, grid1StartX, grid1StartY);
+                    drawYearMarkers(1, 50, grid1StartX, grid1StartY);
+
+                    // --- PAGE 2 ---
+                    doc.addPage();
+                    
+                    // Page 2: Years 51-100
+                    const grid2StartY = 20;
+                    const grid2StartX = (pageW - gridWidth) / 2;
+                    drawGrid(2601, 5200, grid2StartX, grid2StartY);
+                    drawYearMarkers(51, 100, grid2StartX, grid2StartY);
+                    
+                    // Footer on Page 2
+                    doc.setFont('helvetica', 'italic');
+                    doc.setFontSize(8);
+                    doc.setTextColor('#B0B0B0');
+                    doc.text('Chaque case est une semaine. Remplissez-les bien.', pageW / 2, pageH - 12, { align: 'center' });
+                    doc.setFont('helvetica', 'normal');
+                    doc.text('Généré par La Ruche - sans fin, sans frais', pageW / 2, pageH - 8, { align: 'center' });
+
+                    // Save
+                    const dateString = birthDate.toISOString().split('T')[0];
+                    doc.save(`memento-mori-${dateString}.pdf`);
+                    statusText.textContent = 'PDF généré avec succès !';
+
+                } catch (error) {
+                    console.error('PDF Generation Error:', error);
+                    statusText.textContent = 'Une erreur est survenue : ' + error.message;
+                } finally {
+                    setTimeout(() => {
+                      if (birthdateInput.value) {
+                         generateBtn.disabled = false;
+                         statusText.textContent = '';
+                      }
+                    }, 2000);
+                }
+            });
+        });
+    </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

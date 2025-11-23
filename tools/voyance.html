@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tireur de Cartes de Tarot</title>
+  <meta name="description" content="Un outil web 100% frontend pour effectuer un tirage de tarot à une ou trois cartes et obtenir l'interprétation classique des arcanes.">
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px; /* par défaut, peut être changé via body[data-size] */
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; /* align-items:center; */ justify-content:center;
+      padding:48px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative; width:100%; max-width: var(--tool-max-w);}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+    .form-group{display:flex; flex-direction:column; gap:8px}
+    .form-label{font-weight:500; color:var(--color-text-primary)}
+    select.form-input { appearance: none; background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2220%22%20height%3D%2220%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22/%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right 10px center; background-size: 20px; padding-right: 40px; cursor: pointer;}
+    .form-input{
+      width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      font-size:1rem; color:var(--color-text-primary); background:var(--color-bg);
+      transition:border-color .2s, box-shadow .2s;
+    }
+    .form-input:focus{outline:none; border-color:var(--color-violet); box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+    .actions{display:flex; justify-content:center; gap:12px; flex-direction:column; align-items:center;}
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:500; padding:10px 16px; border-radius:var(--radius-md); border:none; cursor:pointer;
+      transition:background-color .2s, box-shadow .2s; font-size:14px; width: 100%;
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn-primary{background:var(--color-violet); color:#fff}
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark)}
+    .btn-primary:disabled{background:#A78BFA; cursor:not-allowed}
+    .status-text{font-size:14px; color:var(--color-text-secondary); text-align:center; min-height:21px}
+
+    /* Styles spécifiques à l'outil */
+    .card-display-container {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      padding: 16px;
+      background: var(--color-bg-alt);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--color-border);
+      min-height: 250px;
+      align-items: center;
+      flex-wrap: wrap;
+      width: 100%;
+    }
+
+    .tarot-card {
+      text-align: center; display: flex; flex-direction: column; align-items: center;
+      flex: 1; min-width: 120px; max-width: 150px;
+    }
+
+    .tarot-card img {
+      width: 100%; height: auto; border-radius: var(--radius-md);
+      box-shadow: 0 4px 10px -2px rgba(0,0,0,0.1); border: 1px solid var(--color-border);
+      margin-bottom: 8px; transition: transform 0.3s ease;
+    }
+    .tarot-card.reversed img { transform: rotate(180deg); }
+
+    .card-label {
+      font-weight: 600; font-size: 0.8rem; color: var(--color-text-secondary);
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .card-name { font-weight: 500; margin-top: 4px; font-size: 0.9rem; }
+
+    .interpretation-section { margin-top: 16px; }
+    .interpretation-card {
+      background: var(--color-bg-alt); padding: 16px; border-radius: var(--radius-lg);
+      border: 1px solid var(--color-border); margin-bottom: 16px;
+    }
+    .interpretation-card h3 { font-size: 1.1rem; margin-bottom: 8px; color: var(--color-violet);}
+    .interpretation-card p { line-height: 1.6; color: var(--color-text-primary);}
+    .hidden { display: none; }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="default">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Tireur de Cartes</h1>
+
+      <div class="generator-card" role="region" aria-label="Tireur de Cartes de Tarot">
+        <div class="form-group">
+          <label for="draw-type" class="form-label">Type de tirage</label>
+          <select id="draw-type" class="form-input">
+            <option value="1">1 carte (Conseil du jour)</option>
+            <option value="3" selected>3 cartes (Passé, Présent, Futur)</option>
+          </select>
+        </div>
+        
+        <div class="actions">
+          <button id="drawButton" class="btn btn-primary">Tirer les cartes</button>
+          <p id="status" class="status-text" aria-live="polite"></p>
+        </div>
+      </div>
+      
+      <div id="results-wrapper" class="hidden" style="width: 100%; margin-top: 24px;">
+        <div id="card-display-area" class="card-display-container">
+          <p>Votre tirage apparaîtra ici.</p>
+        </div>
+
+        <div id="interpretation-section" class="interpretation-section">
+          <!-- Les interprétations seront injectées ici -->
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // Background hex grid — NE PAS MODIFIER (doit rester visuellement identique)
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+
+        const size = 24;
+        const hexW = 2 * size;
+        const hexH = Math.sqrt(3) * size;
+        const stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)';
+        ctx.lineWidth = 1;
+
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX;
+            const y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i;
+              const px = x + size * Math.cos(a);
+              const py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+
+    // --- Logic for the Tarot Reader Tool ---
+    document.addEventListener('DOMContentLoaded', () => {
+      const drawButton = document.getElementById('drawButton');
+      const statusEl = document.getElementById('status');
+      const drawTypeSelect = document.getElementById('draw-type');
+      const resultsWrapper = document.getElementById('results-wrapper');
+      const cardDisplayArea = document.getElementById('card-display-area');
+      const interpretationSection = document.getElementById('interpretation-section');
+      const mainContent = document.querySelector('.main-content');
+
+      const WIKI_IMG_BASE_URL = 'https://upload.wikimedia.org/wikipedia/commons/';
+      const TAROT_DECK = [
+        {name:"Le Fou",img:"9/90/RWS_Tarot_00_Fool.jpg",upright:"Nouveaux départs, foi, potentiel, spontanéité.",reversed:"Imprudence, naïveté, chaos, prise de risque inutile."},
+        {name:"Le Bateleur",img:"d/de/RWS_Tarot_01_Magician.jpg",upright:"Volonté, manifestation, pouvoir, action.",reversed:"Manipulation, mauvaises intentions, talents inexploités."},
+        {name:"La Papesse",img:"8/88/RWS_Tarot_02_High_Priestess.jpg",upright:"Intuition, secrets, sagesse, subconscient.",reversed:"Secrets révélés, confusion, intuition bloquée."},
+        {name:"L'Impératrice",img:"d/d2/RWS_Tarot_03_Empress.jpg",upright:"Féminité, abondance, nature, créativité.",reversed:"Dépendance, blocage créatif, surprotection."},
+        {name:"L'Empereur",img:"c/c3/RWS_Tarot_04_Emperor.jpg",upright:"Autorité, structure, contrôle, paternité.",reversed:"Domination, rigidité, manque de discipline."},
+        {name:"Le Pape",img:"8/8d/RWS_Tarot_05_Hierophant.jpg",upright:"Tradition, institutions, croyances, guidance.",reversed:"Rébellion, non-conformisme, nouvelles approches."},
+        {name:"L'Amoureux",img:"d/db/RWS_Tarot_06_Lovers.jpg",upright:"Amour, harmonie, choix, relations.",reversed:"Conflit, mauvais choix, désalignement des valeurs."},
+        {name:"Le Chariot",img:"9/9b/RWS_Tarot_07_Chariot.jpg",upright:"Victoire, volonté, maîtrise de soi, action.",reversed:"Manque de direction, agression, perte de contrôle."},
+        {name:"La Force",img:"f/f5/RWS_Tarot_08_Strength.jpg",upright:"Force intérieure, courage, compassion, contrôle.",reversed:"Faiblesse, doute, manque de maîtrise de soi."},
+        {name:"L'Ermite",img:"4/4d/RWS_Tarot_09_Hermit.jpg",upright:"Introspection, solitude, guidance intérieure.",reversed:"Isolement, solitude, repli sur soi excessif."},
+        {name:"La Roue de Fortune",img:"3/3c/RWS_Tarot_10_Wheel_of_Fortune.jpg",upright:"Changement, cycles, destin, tournant.",reversed:"Malchance, résistance au changement, revers."},
+        {name:"La Justice",img:"e/e0/RWS_Tarot_11_Justice.jpg",upright:"Justice, vérité, cause et effet, clarté.",reversed:"Injustice, mensonges, conséquences karmiques."},
+        {name:"Le Pendu",img:"2/2b/RWS_Tarot_12_Hanged_Man.jpg",upright:"Pause, nouvelles perspectives, sacrifice, lâcher-prise.",reversed:"Stagnation, indécision, sacrifice inutile."},
+        {name:"La Mort",img:"d/d7/RWS_Tarot_13_Death.jpg",upright:"Fin, transformation, transition, changement.",reversed:"Résistance au changement, peur de la fin, stagnation."},
+        {name:"La Tempérance",img:"f/f8/RWS_Tarot_14_Temperance.jpg",upright:"Équilibre, modération, patience, harmonie.",reversed:"Déséquilibre, excès, impatience, conflit."},
+        {name:"Le Diable",img:"5/55/RWS_Tarot_15_Devil.jpg",upright:"Attachement, dépendance, matérialisme, tentation.",reversed:"Libération, détachement, fin des dépendances."},
+        {name:"La Maison Dieu",img:"5/53/RWS_Tarot_16_Tower.jpg",upright:"Révélation soudaine, chaos, destruction, éveil.",reversed:"Peur du changement, éviter le désastre, crise retardée."},
+        {name:"L'Étoile",img:"d/db/RWS_Tarot_17_Star.jpg",upright:"Espoir, foi, inspiration, guérison.",reversed:"Désespoir, manque de foi, déconnexion."},
+        {name:"La Lune",img:"7/7f/RWS_Tarot_18_Moon.jpg",upright:"Illusion, peur, anxiété, intuition.",reversed:"Clarté, fin de la confusion, vérité révélée."},
+        {name:"Le Soleil",img:"1/17/RWS_Tarot_19_Sun.jpg",upright:"Joie, succès, clarté, vitalité.",reversed:"Tristesse, pessimisme, manque de succès."},
+        {name:"Le Jugement",img:"d/dd/RWS_Tarot_20_Judgement.jpg",upright:"Renaissance, jugement, pardon, bilan.",reversed:"Doute de soi, auto-critique, refus du pardon."},
+        {name:"Le Monde",img:"f/ff/RWS_Tarot_21_World.jpg",upright:"Achèvement, intégration, accomplissement, voyage.",reversed:"Manque d'achèvement, stagnation, projet inachevé."},
+        {name:"As de Bâton",img:"1/11/Wands01.jpg",upright:"Inspiration, nouvelle opportunité, potentiel.",reversed:"Manque d'inspiration, retard, occasion manquée."},
+        {name:"Deux de Bâton",img:"0/0f/Wands02.jpg",upright:"Planification, décision, potentiel futur.",reversed:"Peur de l'inconnu, manque de planification."},
+        {name:"Trois de Bâton",img:"f/ff/Wands03.jpg",upright:"Expansion, prévoyance, attente des résultats.",reversed:"Retards, frustration, manque de vision."},
+        {name:"Quatre de Bâton",img:"a/a4/Wands04.jpg",upright:"Célébration, harmonie, foyer, communauté.",reversed:"Conflit, instabilité, manque d'harmonie."},
+        {name:"Cinq de Bâton",img:"9/9d/Wands05.jpg",upright:"Compétition, conflit, désaccord, défis.",reversed:"Fin du conflit, accord, éviter le conflit."},
+        {name:"Six de Bâton",img:"3/3b/Wands06.jpg",upright:"Victoire, reconnaissance publique, succès.",reversed:"Échec, manque de reconnaissance, orgueil."},
+        {name:"Sept de Bâton",img:"e/e7/Wands07.jpg",upright:"Défense, persévérance, défi, conviction.",reversed:"Abandon, être submergé,放弃."},
+        {name:"Huit de Bâton",img:"6/6b/Wands08.jpg",upright:"Action rapide, mouvement, nouvelles, communication.",reversed:"Retards, frustration, stagnation."},
+        {name:"Neuf de Bâton",img:"4/4d/Wands09.jpg",upright:"Résilience, courage, dernière ligne droite.",reversed:"Fatigue, abandon, être sur la défensive."},
+        {name:"Dix de Bâton",img:"0/0b/Wands10.jpg",upright:"Fardeau, responsabilité, travail acharné.",reversed:"Lâcher prise, déléguer, fardeau trop lourd."},
+        {name:"Valet de Bâton",img:"6/6a/Wands11.jpg",upright:"Enthousiasme, exploration, messages.",reversed:"Indécision, manque de direction, procrastination."},
+        {name:"Cavalier de Bâton",img:"1/16/Wands12.jpg",upright:"Énergie, passion, action, impulsion.",reversed:"Impulsivité, précipitation, manque de direction."},
+        {name:"Reine de Bâton",img:"0/0d/Wands13.jpg",upright:"Confiance, charisme, indépendance, détermination.",reversed:"Insécurité, jalousie, intimidation."},
+        {name:"Roi de Bâton",img:"c/ce/Wands14.jpg",upright:"Leadership, vision, entrepreneuriat, honneur.",reversed:"Impulsivité, autoritarisme, manque de vision."},
+        {name:"As de Coupe",img:"3/36/Cups01.jpg",upright:"Amour, nouvelles émotions, compassion, créativité.",reversed:"Émotions bloquées, amour non partagé, tristesse."},
+        {name:"Deux de Coupe",img:"f/f8/Cups02.jpg",upright:"Partenariat, amour, connexion, harmonie.",reversed:"Rupture, désaccord, déconnexion."},
+        {name:"Trois de Coupe",img:"7/7a/Cups03.jpg",upright:"Célébration, amitié, communauté, joie.",reversed:"Gossip, excès, solitude."},
+        {name:"Quatre de Coupe",img:"3/35/Cups04.jpg",upright:"Apathie, contemplation, occasions manquées.",reversed:"Prise de conscience, nouvelles opportunités, fin de l'ennui."},
+        {name:"Cinq de Coupe",img:"d/d7/Cups05.jpg",upright:"Perte, regret, deuil, déception.",reversed:"Acceptation, pardon, passer à autre chose."},
+        {name:"Six de Coupe",img:"1/17/Cups06.jpg",upright:"Nostalgie, innocence, souvenirs heureux.",reversed:"Être coincé dans le passé, refus de grandir."},
+        {name:"Sept de Coupe",img:"a/ae/Cups07.jpg",upright:"Choix, illusions, rêves, imagination.",reversed:"Confusion, mauvais choix, tentation."},
+        {name:"Huit de Coupe",img:"6/60/Cups08.jpg",upright:"Abandon, quête de sens, introspection.",reversed:"Peur de l'abandon, stagnation, retour en arrière."},
+        {name:"Neuf de Coupe",img:"2/24/Cups09.jpg",upright:"Satisfaction, souhaits exaucés, contentement.",reversed:"Insatisfaction, matérialisme, ne pas obtenir ce que l'on veut."},
+        {name:"Dix de Coupe",img:"8/84/Cups10.jpg",upright:"Bonheur familial, harmonie, accomplissement.",reversed:"Conflit familial, foyer brisé, malheur."},
+        {name:"Valet de Coupe",img:"a/ad/Cups11.jpg",upright:"Créativité, messages émotionnels, intuition.",reversed:"Immaturité émotionnelle, blocage créatif."},
+        {name:"Cavalier de Coupe",img:"f/fa/Cups12.jpg",upright:"Romance, charme, imagination, offre.",reversed:"Illusion, humeur changeante, superficialité."},
+        {name:"Reine de Coupe",img:"6/62/Cups13.jpg",upright:"Compassion, intuition, calme, bienveillance.",reversed:"Hypersensibilité, dépendance émotionnelle."},
+        {name:"Roi de Coupe",img:"0/04/Cups14.jpg",upright:"Maîtrise émotionnelle, compassion, diplomatie.",reversed:"Manipulation émotionnelle, humeur instable."},
+        {name:"As d'Épée",img:"1/1a/Swords01.jpg",upright:"Clarté, vérité, nouvelle idée, percée.",reversed:"Confusion, mensonges, manque de clarté."},
+        {name:"Deux d'Épée",img:"9/9e/Swords02.jpg",upright:"Indécision, impasse, choix difficile.",reversed:"Confusion, mauvais choix, vérité révélée."},
+        {name:"Trois d'Épée",img:"0/02/Swords03.jpg",upright:"Chagrin, peine de cœur, douleur, séparation.",reversed:"Guérison, pardon, surmonter la douleur."},
+        {name:"Quatre d'Épée",img:"b/bf/Swords04.jpg",upright:"Repos, récupération, contemplation, pause.",reversed:"Épuisement, stagnation, besoin de repos."},
+        {name:"Cinq d'Épée",img:"2/21/Swords05.jpg",upright:"Conflit, défaite, victoire à la Pyrrhus.",reversed:"Réconciliation, fin du conflit, compromis."},
+        {name:"Six d'Épée",img:"2/29/Swords06.jpg",upright:"Transition, passage, déménagement, guérison.",reversed:"Résistance au changement, voyage difficile."},
+        {name:"Sept d'Épée",img:"3/34/Swords07.jpg",upright:"Tromperie, stratégie, agir seul, mensonge.",reversed:"Confession, vérité révélée, conscience coupable."},
+        {name:"Huit d'Épée",img:"a/a7/Swords08.jpg",upright:"Restriction, limitation, auto-sabotage.",reversed:"Libération, nouvelles perspectives, prise de contrôle."},
+        {name:"Neuf d'Épée",img:"2/2f/Swords09.jpg",upright:"Anxiété, peur, cauchemars, désespoir.",reversed:"Libération de la peur, espoir, aide."},
+        {name:"Dix d'Épée",img:"d/d4/Swords10.jpg",upright:"Fin douloureuse, trahison, crise, échec.",reversed:"Guérison, nouvelle chance, surmonter le pire."},
+        {name:"Valet d'Épée",img:"4/4c/Swords11.jpg",upright:"Curiosité, nouvelles idées, communication.",reversed:"Gossip, manque de tact, impatience."},
+        {name:"Cavalier d'Épée",img:"b/b0/Swords12.jpg",upright:"Action rapide, ambition, précipitation.",reversed:"Impulsivité, précipitation, manque de direction."},
+        {name:"Reine d'Épée",img:"d/d4/Swords13.jpg",upright:"Indépendance, clarté, intelligence, honnêteté.",reversed:"Froideur, critique, amertume."},
+        {name:"Roi d'Épée",img:"3/33/Swords14.jpg",upright:"Autorité, vérité, clarté intellectuelle, justice.",reversed:"Manipulation, autoritarisme, cruauté."},
+        {name:"As de Denier",img:"f/fd/Pents01.jpg",upright:"Nouvelle opportunité financière, prospérité.",reversed:"Opportunité manquée, mauvais investissement."},
+        {name:"Deux de Denier",img:"9/9f/Pents02.jpg",upright:"Équilibre, gestion, adaptation.",reversed:"Déséquilibre, mauvaise gestion, stress financier."},
+        {name:"Trois de Denier",img:"4/42/Pents03.jpg",upright:"Travail d'équipe, collaboration, maîtrise.",reversed:"Manque de travail d'équipe, mauvaise qualité."},
+        {name:"Quatre de Denier",img:"3/35/Pents04.jpg",upright:"Stabilité, sécurité, contrôle, possession.",reversed:"Avarice, peur de la perte, matérialisme."},
+        {name:"Cinq de Denier",img:"9/96/Pents05.jpg",upright:"Pauvreté, difficultés financières, isolement.",reversed:"Fin des difficultés, aide, espoir retrouvé."},
+        {name:"Six de Denier",img:"a/a6/Pents06.jpg",upright:"Générosité, charité, partage, équilibre.",reversed:"Dette, égoïsme, abus de générosité."},
+        {name:"Sept de Denier",img:"6/6a/Pents07.jpg",upright:"Patience, investissement à long terme, récolte.",reversed:"Impatience, frustration, mauvais investissement."},
+        {name:"Huit de Denier",img:"4/49/Pents08.jpg",upright:"Apprentissage, maîtrise, diligence, compétence.",reversed:"Perfectionnisme, travail répétitif, manque d'ambition."},
+        {name:"Neuf de Denier",img:"f/f0/Pents09.jpg",upright:"Abondance, indépendance, luxe, autosuffisance.",reversed:"Dépendance financière, travail acharné sans récompense."},
+        {name:"Dix de Denier",img:"4/42/Pents10.jpg",upright:"Héritage, richesse, famille, stabilité.",reversed:"Conflit familial, instabilité financière, perte."},
+        {name:"Valet de Denier",img:"e/e3/Pents11.jpg",upright:"Nouvelle opportunité, apprentissage, diligence.",reversed:"Procrastination, occasion manquée, paresse."},
+        {name:"Cavalier de Denier",img:"d/d5/Pents12.jpg",upright:"Travail acharné, routine, fiabilité, patience.",reversed:"Stagnation, paresse, manque de fiabilité."},
+        {name:"Reine de Denier",img:"8/88/Pents13.jpg",upright:"Praticité, confort, générosité, nature.",reversed:"Matérialisme, insécurité, superficialité."},
+        {name:"Roi de Denier",img:"1/1c/Pents14.jpg",upright:"Richesse, succès, sécurité, leadership.",reversed:"Corruption, matérialisme, avidité."}
+      ];
+
+      function drawCards(numCards) {
+        const shuffled = [...TAROT_DECK].sort(() => 0.5 - Math.random());
+        const selection = shuffled.slice(0, numCards);
+        return selection.map(card => ({
+          ...card,
+          isReversed: Math.random() < 0.3 // 30% chance of being reversed
+        }));
+      }
+
+      function displayResults(cards) {
+        cardDisplayArea.innerHTML = '';
+        interpretationSection.innerHTML = '';
+        
+        const positions = cards.length === 1 ? ['Conseil du jour'] : ['Passé', 'Présent', 'Futur'];
+        document.body.dataset.size = cards.length === 1 ? 'default' : 'wide';
+
+        cards.forEach((card, index) => {
+          // Display card image
+          const cardEl = document.createElement('div');
+          cardEl.className = 'tarot-card';
+          if (card.isReversed) {
+            cardEl.classList.add('reversed');
+          }
+          cardEl.innerHTML = `
+            <div class="card-label">${positions[index]}</div>
+            <img src="${WIKI_IMG_BASE_URL}${card.img}" alt="${card.name}">
+            <div class="card-name">${card.name} ${card.isReversed ? '(Inversée)' : ''}</div>
+          `;
+          cardDisplayArea.appendChild(cardEl);
+
+          // Display interpretation
+          const interpretationEl = document.createElement('div');
+          interpretationEl.className = 'interpretation-card';
+          const meaning = card.isReversed ? card.reversed : card.upright;
+          interpretationEl.innerHTML = `
+            <h3>${positions[index]}: ${card.name} ${card.isReversed ? '(Inversée)' : ''}</h3>
+            <p>${meaning}</p>
+          `;
+          interpretationSection.appendChild(interpretationEl);
+        });
+        
+        resultsWrapper.classList.remove('hidden');
+        mainContent.scrollTo({ top: mainContent.scrollHeight, behavior: 'smooth' });
+      }
+
+
+      drawButton.addEventListener('click', () => {
+        drawButton.disabled = true;
+        statusEl.textContent = 'Mélange des cartes...';
+        
+        // Use a short timeout to allow the UI to update
+        setTimeout(() => {
+            try {
+                const numCards = parseInt(drawTypeSelect.value, 10);
+                const drawnCards = drawCards(numCards);
+                displayResults(drawnCards);
+                statusEl.textContent = 'Votre tirage est prêt.';
+            } catch (error) {
+                statusEl.textContent = `Erreur : ${error.message}`;
+                resultsWrapper.classList.add('hidden');
+            } finally {
+                drawButton.disabled = false;
+            }
+        }, 300);
+      });
+    });
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

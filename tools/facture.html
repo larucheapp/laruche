@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche" >
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Générateur de Facture pour Freelance</title>
+  <meta name="description" content="Créez des factures professionnelles et conformes pour votre activité de freelance en France.">
+  <!-- jsPDF libraries for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px; /* par défaut, peut être changé via body[data-size] */
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:flex-start; justify-content:center;
+      padding:72px 24px 48px; /* Utilisation de flex-start pour un positionnement fiable */ overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+    .form-group{display:flex; flex-direction:column; gap:8px}
+    .form-label{font-weight:500; color:var(--color-text-primary)}
+    .form-input, textarea.form-input {
+      width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      font-size:1rem; color:var(--color-text-primary); background:var(--color-bg);
+      transition:border-color .2s, box-shadow .2s; font-family: inherit;
+    }
+    textarea.form-input { resize: vertical; min-height: 80px; }
+    .form-input:focus, textarea.form-input:focus {outline:none; border-color:var(--color-violet); box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+    
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:500; padding:10px 16px; border-radius:var(--radius-md); border:none; cursor:pointer;
+      transition:background-color .2s, box-shadow .2s, opacity .2s; font-size:14px;
+      text-decoration: none;
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn-primary{background:var(--color-violet); color:#fff}
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark)}
+    .btn-primary:disabled{background:#A78BFA; cursor:not-allowed; opacity: 0.7;}
+    .btn-secondary {
+        background-color: var(--color-bg-alt); color: var(--color-text-secondary);
+        border: 1px solid var(--color-border);
+    }
+    .btn-secondary:hover:not(:disabled) { background-color: #f0f1f3; }
+
+    /* Invoice Generator Specific Styles */
+    .progress-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+    .progress-step { flex: 1; height: 6px; background-color: var(--color-border); border-radius: 3px; transition: background-color 0.3s; }
+    .progress-step.active { background-color: var(--color-violet); }
+    .wizard-step { display: none; flex-direction: column; gap: 20px; }
+    .wizard-step.active { display: flex; }
+    .step-title { font-size: 1.25rem; font-weight: 600; margin-bottom: -8px; }
+    .navigation-buttons { display: flex; justify-content: space-between; margin-top: 16px; }
+
+    /* Logo Uploader */
+    .logo-uploader { display: flex; align-items: center; gap: 16px; }
+    .logo-preview { width: 64px; height: 64px; border-radius: var(--radius-md); border: 1px dashed var(--color-border); background-color: var(--color-bg-alt); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .logo-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .logo-uploader-text { font-size: 14px; color: var(--color-text-secondary); }
+    input[type="file"] { display: none; }
+    .logo-uploader-btn { cursor: pointer; color: var(--color-violet); font-weight: 500; }
+    
+    /* Line items */
+    .line-item { display: grid; grid-template-columns: 1fr 80px 100px 40px; gap: 10px; align-items: center; padding-bottom: 12px; }
+    .line-item:not(:last-child) { border-bottom: 1px solid var(--color-border); margin-bottom: 12px; }
+    .line-item-header { font-weight: 500; font-size: 12px; color: var(--color-text-secondary); }
+    .btn-remove-item { background: transparent; border: none; color: var(--color-text-secondary); cursor: pointer; font-size: 20px; }
+    .btn-remove-item:hover { color: #DC2626; }
+    .totals-display { border-top: 2px solid var(--color-border); margin-top: 16px; padding-top: 16px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+    .total-row { display: flex; justify-content: space-between; width: 250px; }
+    .total-row span:first-child { color: var(--color-text-secondary); }
+    .total-row.grand-total { font-weight: bold; font-size: 1.1rem; }
+    
+    .checkbox-group { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+    .checkbox-group label { font-size: 14px; color: var(--color-text-primary); cursor: pointer; }
+    .checkbox-group input { width: 16px; height: 16px; accent-color: var(--color-violet); }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="wide">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Générateur de Facture</h1>
+
+      <div class="generator-card" role="region" aria-label="Générateur de Facture">
+        <div class="progress-bar">
+          <div class="progress-step active"></div>
+          <div class="progress-step"></div>
+          <div class="progress-step"></div>
+          <div class="progress-step"></div>
+          <div class="progress-step"></div>
+        </div>
+
+        <form id="invoice-form">
+          <!-- Step 1: Your Info -->
+          <div id="step-1" class="wizard-step active">
+            <h2 class="step-title">Vos Informations</h2>
+            <div class="logo-uploader">
+              <div class="logo-preview" id="logo-preview-container"></div>
+              <div>
+                <label for="logo-upload" class="logo-uploader-btn">Télécharger un logo</label>
+                <input type="file" id="logo-upload" accept="image/*">
+                <p class="logo-uploader-text">PNG ou JPG. Carré recommandé.</p>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="freelancer-name" class="form-label">Nom complet ou nom de l'entreprise</label>
+              <input type="text" id="freelancer-name" class="form-input" required>
+            </div>
+            <div class="form-group">
+              <label for="freelancer-address" class="form-label">Adresse complète</label>
+              <textarea id="freelancer-address" class="form-input" required></textarea>
+            </div>
+            <div class="form-group">
+              <label for="freelancer-siret" class="form-label">N° de SIRET</label>
+              <input type="text" id="freelancer-siret" class="form-input" required>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="no-vat" checked>
+                <label for="no-vat">Je ne suis pas assujetti à la TVA (art. 293B du CGI)</label>
+            </div>
+          </div>
+
+          <!-- Step 2: Client's Info -->
+          <div id="step-2" class="wizard-step">
+             <h2 class="step-title">Informations du Client</h2>
+             <div class="form-group">
+              <label for="client-name" class="form-label">Nom de l'entreprise cliente</label>
+              <input type="text" id="client-name" class="form-input" required>
+            </div>
+            <div class="form-group">
+              <label for="client-address" class="form-label">Adresse complète du client</label>
+              <textarea id="client-address" class="form-input" required></textarea>
+            </div>
+          </div>
+
+          <!-- Step 3: Invoice Details -->
+          <div id="step-3" class="wizard-step">
+            <h2 class="step-title">Détails de la Facture</h2>
+            <div class="form-group">
+                <label for="invoice-number" class="form-label">Numéro de facture</label>
+                <input type="text" id="invoice-number" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label for="invoice-date" class="form-label">Date d'émission</label>
+                <input type="date" id="invoice-date" class="form-input" required>
+            </div>
+             <div class="form-group">
+                <label for="due-date" class="form-label">Date d'échéance</label>
+                <input type="date" id="due-date" class="form-input" required>
+            </div>
+          </div>
+
+          <!-- Step 4: Line Items -->
+          <div id="step-4" class="wizard-step">
+            <h2 class="step-title">Prestations</h2>
+            <div id="line-items-container">
+              <div class="line-item line-item-header">
+                  <span>Description</span>
+                  <span>Qté</span>
+                  <span>Prix U. (€)</span>
+                  <span></span>
+              </div>
+              <!-- JS will add items here -->
+            </div>
+            <button type="button" id="add-item-btn" class="btn btn-secondary" style="width: auto;">+ Ajouter une prestation</button>
+            <div class="totals-display">
+                <div class="total-row">
+                    <span>Total HT</span>
+                    <span id="total-ht">0.00 €</span>
+                </div>
+                 <div class="total-row grand-total">
+                    <span>TOTAL</span>
+                    <span id="grand-total">0.00 €</span>
+                </div>
+            </div>
+          </div>
+
+          <!-- Step 5: Payment & Finalization -->
+          <div id="step-5" class="wizard-step">
+            <h2 class="step-title">Paiement & Finalisation</h2>
+            <div class="form-group">
+                <label for="iban" class="form-label">IBAN (pour le virement)</label>
+                <input type="text" id="iban" class="form-input" placeholder="FRXX XXXX XXXX XXXX XXXX XXXX XXX">
+            </div>
+            <div class="form-group">
+                <label for="notes" class="form-label">Notes (optionnel)</label>
+                <textarea id="notes" class="form-input" placeholder="Ex: Merci pour votre confiance !"></textarea>
+            </div>
+          </div>
+        </form>
+
+        <div class="navigation-buttons">
+          <button type="button" id="prev-btn" class="btn btn-secondary">Précédent</button>
+          <button type="button" id="next-btn" class="btn btn-primary">Suivant</button>
+          <button type="button" id="generate-btn" class="btn btn-primary" style="display: none;">Générer la Facture PDF</button>
+          <a href="index.html" role="button" id="new-invoice-btn" class="btn btn-secondary" style="display: none;">Nouvelle Facture</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Background hex grid
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+        const size = 24, hexW = 2 * size, hexH = Math.sqrt(3) * size, stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)'; ctx.lineWidth = 1;
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX, y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){ const a = 2 * Math.PI / 6 * i, px = x + size * Math.cos(a), py = y + size * Math.sin(a); if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+
+    // Invoice Generator Logic
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('invoice-form');
+        const steps = Array.from(document.querySelectorAll('.wizard-step'));
+        const progressSteps = Array.from(document.querySelectorAll('.progress-step'));
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const generateBtn = document.getElementById('generate-btn');
+        const newInvoiceBtn = document.getElementById('new-invoice-btn');
+        const addItemBtn = document.getElementById('add-item-btn');
+        const lineItemsContainer = document.getElementById('line-items-container');
+        const logoUpload = document.getElementById('logo-upload');
+        const logoPreviewContainer = document.getElementById('logo-preview-container');
+
+        let currentStep = 0;
+        let logoData = null;
+
+        const updateUI = () => {
+            steps.forEach((step, index) => {
+                step.classList.toggle('active', index === currentStep);
+            });
+            progressSteps.forEach((step, index) => {
+                step.classList.toggle('active', index <= currentStep);
+            });
+            prevBtn.style.display = currentStep === 0 ? 'none' : 'inline-flex';
+            nextBtn.style.display = currentStep === steps.length - 1 ? 'none' : 'inline-flex';
+            generateBtn.style.display = currentStep === steps.length - 1 ? 'inline-flex' : 'none';
+            newInvoiceBtn.style.display = 'none';
+        };
+        
+        const validateStep = () => {
+            const currentStepInputs = steps[currentStep].querySelectorAll('input[required], textarea[required]');
+            for (const input of currentStepInputs) {
+                if (!input.value.trim()) {
+                    input.focus();
+                    // Simple validation feedback
+                    input.style.borderColor = 'red';
+                    setTimeout(() => input.style.borderColor = '', 2000);
+                    return false;
+                }
+            }
+             if (currentStep === 3 && document.querySelectorAll('.line-item-row').length === 0) {
+                alert("Veuillez ajouter au moins une prestation.");
+                return false;
+            }
+            return true;
+        };
+
+        nextBtn.addEventListener('click', () => {
+            if (validateStep() && currentStep < steps.length - 1) {
+                currentStep++;
+                updateUI();
+            }
+        });
+
+        prevBtn.addEventListener('click', () => {
+            if (currentStep > 0) {
+                currentStep--;
+                updateUI();
+            }
+        });
+        
+        // Line items logic
+        const updateTotals = () => {
+            let totalHT = 0;
+            document.querySelectorAll('.line-item-row').forEach(row => {
+                const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+                const price = parseFloat(row.querySelector('.item-price').value) || 0;
+                totalHT += qty * price;
+            });
+            document.getElementById('total-ht').textContent = `${totalHT.toFixed(2)} €`;
+            document.getElementById('grand-total').textContent = `${totalHT.toFixed(2)} €`; // As VAT is not handled for now
+        };
+
+        const addLineItem = () => {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'line-item line-item-row';
+            itemDiv.innerHTML = `
+                <input type="text" class="form-input item-desc" placeholder="Description de la prestation">
+                <input type="number" class="form-input item-qty" value="1" min="0">
+                <input type="number" class="form-input item-price" placeholder="0.00" min="0">
+                <button type="button" class="btn-remove-item">&times;</button>
+            `;
+            lineItemsContainer.appendChild(itemDiv);
+            itemDiv.querySelector('.btn-remove-item').addEventListener('click', () => {
+                itemDiv.remove();
+                updateTotals();
+            });
+             itemDiv.querySelectorAll('.item-qty, .item-price').forEach(input => {
+                input.addEventListener('input', updateTotals);
+            });
+        };
+        
+        addItemBtn.addEventListener('click', addLineItem);
+        
+        // Logo upload
+        logoUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    logoData = event.target.result;
+                    logoPreviewContainer.innerHTML = `<img src="${logoData}" alt="Logo preview">`;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Dates
+        document.getElementById('invoice-date').valueAsDate = new Date();
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 30);
+        document.getElementById('due-date').valueAsDate = dueDate;
+
+        // PDF Generation
+        generateBtn.addEventListener('click', () => {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            const formData = {
+                freelancer: {
+                    name: document.getElementById('freelancer-name').value,
+                    address: document.getElementById('freelancer-address').value.split('\n'),
+                    siret: `SIRET : ${document.getElementById('freelancer-siret').value}`
+                },
+                client: {
+                    name: document.getElementById('client-name').value,
+                    address: document.getElementById('client-address').value.split('\n')
+                },
+                invoice: {
+                    number: `Facture n° ${document.getElementById('invoice-number').value}`,
+                    date: `Date d'émission : ${new Date(document.getElementById('invoice-date').value).toLocaleDateString('fr-FR')}`,
+                    dueDate: `Date d'échéance : ${new Date(document.getElementById('due-date').value).toLocaleDateString('fr-FR')}`
+                },
+                items: Array.from(document.querySelectorAll('.line-item-row')).map(row => ({
+                    desc: row.querySelector('.item-desc').value,
+                    qty: row.querySelector('.item-qty').value,
+                    price: parseFloat(row.querySelector('.item-price').value).toFixed(2)
+                })),
+                payment: {
+                    iban: `IBAN : ${document.getElementById('iban').value}`,
+                    notes: document.getElementById('notes').value.split('\n'),
+                },
+                isVatFree: document.getElementById('no-vat').checked,
+                total: document.getElementById('grand-total').textContent,
+                totalHT: document.getElementById('total-ht').textContent,
+            };
+
+            const pageW = doc.internal.pageSize.getWidth();
+            const margin = 15;
+            let cursorY = 20;
+
+            // --- HEADER ---
+            if (logoData) {
+                doc.addImage(logoData, 'PNG', pageW - margin - 30, cursorY, 30, 30);
+            }
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.text(formData.freelancer.name, margin, cursorY + 5);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(10);
+            formData.freelancer.address.forEach(line => { cursorY += 5; doc.text(line, margin, cursorY + 5); });
+            cursorY += 5;
+            doc.text(formData.freelancer.siret, margin, cursorY + 5);
+            
+            // --- INVOICE & CLIENT INFO ---
+            cursorY = Math.max(cursorY, 60) + 20;
+            const infoBoxX = pageW / 2 + 10;
+            
+            doc.setFont('helvetica', 'bold');
+            doc.text("Client :", margin, cursorY);
+            doc.setFont('helvetica', 'normal');
+            doc.text(formData.client.name, margin, cursorY + 6);
+            let clientY = cursorY + 6;
+            formData.client.address.forEach(line => { clientY += 5; doc.text(line, margin, clientY); });
+
+            doc.text(formData.invoice.number, infoBoxX, cursorY);
+            doc.text(formData.invoice.date, infoBoxX, cursorY + 6);
+            doc.text(formData.invoice.dueDate, infoBoxX, cursorY + 12);
+
+            // --- LINE ITEMS TABLE ---
+            cursorY = clientY + 20;
+            const tableData = formData.items.map(item => [
+                item.desc, item.qty, `${item.price} €`, `${(item.qty * item.price).toFixed(2)} €`
+            ]);
+            
+            doc.autoTable({
+                startY: cursorY,
+                head: [['Description', 'Quantité', 'Prix Unitaire HT', 'Total HT']],
+                body: tableData,
+                theme: 'grid',
+                headStyles: { fillColor: [124, 58, 237] }
+            });
+
+            // --- TOTALS ---
+            let finalY = doc.autoTable.previous.finalY + 10;
+            const totalsX = pageW - margin - 60;
+            doc.setFont('helvetica', 'bold');
+            doc.text('Total HT', totalsX, finalY, { align: 'left' });
+            doc.text(formData.totalHT, pageW - margin, finalY, { align: 'right' });
+            if (formData.isVatFree) {
+                 doc.setFontSize(9);
+                 doc.setFont('helvetica', 'normal');
+                 doc.text("TVA non applicable - art. 293 B du CGI", totalsX, finalY + 6, { align: 'left' });
+            }
+            finalY += 10;
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.text('TOTAL À PAYER', totalsX, finalY, { align: 'left' });
+            doc.text(formData.total, pageW - margin, finalY, { align: 'right' });
+
+            // --- FOOTER ---
+            const pageH = doc.internal.pageSize.getHeight();
+            const footerY = pageH - 35;
+            doc.setLineWidth(0.2);
+            doc.line(margin, footerY, pageW - margin, footerY);
+
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.text("Conditions de paiement", margin, footerY + 8);
+            doc.setFont('helvetica', 'normal');
+            doc.text(formData.payment.iban, margin, footerY + 14);
+
+            let notesY = footerY + 8;
+            if(formData.payment.notes.length > 0 && formData.payment.notes[0] !== '') {
+                 doc.setFont('helvetica', 'bold');
+                 doc.text("Notes", infoBoxX, notesY);
+                 doc.setFont('helvetica', 'normal');
+                 formData.payment.notes.forEach(line => { doc.text(line, infoBoxX, notesY += 5); });
+            }
+
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.text("En cas de retard de paiement, une indemnité forfaitaire pour frais de recouvrement de 40€ sera appliquée, en plus des pénalités de retard.", margin, pageH - 10);
+            
+            doc.save(`facture-${formData.invoice.number.split(' ')[2]}.pdf`);
+
+            // Show 'New Invoice' button after generation
+            prevBtn.style.display = 'none';
+            generateBtn.style.display = 'none';
+            newInvoiceBtn.style.display = 'inline-flex';
+        });
+
+        // Init
+        updateUI();
+        addLineItem(); // Start with one line item
+    });
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

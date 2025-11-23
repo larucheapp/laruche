@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche" >
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Créateur de Classeur Yu-Gi-Oh!</title>
+  <meta name="description" content="Créez, gérez et exportez vos classeurs de cartes Yu-Gi-Oh! en PDF stylisés ou certifiés pour l'assurance.">
+  <!-- jsPDF libraries for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px; /* par défaut, peut être changé via body[data-size] */
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:flex-start; justify-content:center;
+      padding:72px 24px 48px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+    .form-group{display:flex; flex-direction:column; gap:8px}
+    .form-label{font-weight:500; color:var(--color-text-primary)}
+    .form-input{
+      width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      font-size:1rem; color:var(--color-text-primary); background:var(--color-bg);
+      transition:border-color .2s, box-shadow .2s;
+    }
+    .form-input:focus{outline:none; border-color:var(--color-violet); box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+    
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:500; padding:10px 16px; border-radius:var(--radius-md); border:none; cursor:pointer;
+      transition:background-color .2s, box-shadow .2s, opacity .2s; font-size:14px;
+      text-decoration: none;
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn-primary{background:var(--color-violet); color:#fff}
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark)}
+    .btn-primary:disabled{background:#A78BFA; cursor:not-allowed; opacity: 0.7;}
+    .btn-secondary {
+        background-color: var(--color-bg-alt); color: var(--color-text-secondary);
+        border: 1px solid var(--color-border);
+    }
+    .btn-secondary:hover:not(:disabled) { background-color: #f0f1f3; }
+    .actions{display:flex; justify-content:flex-end; gap:12px}
+
+
+    /* YGO Binder Specific Styles */
+    .binder-layout {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        gap: 24px;
+        width: 100%;
+    }
+    .search-panel, .binder-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    #search-results {
+        height: 250px;
+        overflow-y: auto;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        padding: 8px;
+    }
+    .card-result-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px;
+        border-radius: var(--radius-md);
+        transition: background-color .2s;
+        cursor: pointer;
+    }
+    .card-result-item:hover { background-color: var(--color-bg-alt); }
+    .card-result-item img { width: 40px; height: auto; border-radius: 4px; flex-shrink: 0;}
+    .card-result-item .card-name { flex-grow: 1; font-size: 14px; }
+    .card-result-item .card-price { font-size: 14px; font-weight: 500; color: var(--color-violet); flex-shrink: 0;}
+
+    .add-from-search-btn {
+        background-color: var(--color-violet);
+        color: white;
+        border: none;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        font-size: 18px;
+        font-weight: 500;
+        line-height: 22px;
+        cursor: pointer;
+        transition: background-color .2s;
+        flex-shrink: 0;
+        margin-left: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .add-from-search-btn:hover:not(:disabled) {
+        background-color: var(--color-violet-dark);
+    }
+    .add-from-search-btn:disabled {
+        background-color: #a78bfa;
+        opacity: 0.8;
+        cursor: default;
+    }
+
+    .status-text {
+      padding: 20px; text-align: center; color: var(--color-text-secondary);
+    }
+    .spinner {
+      border: 4px solid var(--color-border);
+      border-top: 4px solid var(--color-violet);
+      border-radius: 50%;
+      width: 40px; height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    .binder-header {
+      display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    }
+    .binder-title { font-size: 1.25rem; font-weight: 600; flex-grow: 1; }
+    #binder-total-value {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--color-violet);
+        white-space: nowrap;
+    }
+    .binder-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        border: 1px solid var(--color-border);
+        padding: 12px;
+        border-radius: var(--radius-lg);
+        background-color: var(--color-bg-alt);
+    }
+    .binder-slot {
+        aspect-ratio: 63/88; /* Yu-Gi-Oh card aspect ratio */
+        background-color: var(--color-bg);
+        border-radius: var(--radius-md);
+        border: 2px dashed var(--color-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        cursor: pointer;
+        transition: transform .2s, box-shadow .2s;
+    }
+    .binder-slot:hover { transform: scale(1.05); box-shadow: 0 0 0 3px rgba(124,58,237,.4); }
+    .binder-slot img { width: 100%; height: 100%; object-fit: cover; }
+    
+    .binder-pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 16px;
+    }
+
+    /* Card Preview Panel */
+    #card-preview {
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        background: var(--color-bg-alt);
+        padding: 16px;
+        height: 330px;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        overflow: hidden;
+    }
+    #card-preview::before {
+        content: '';
+        position: absolute;
+        bottom: -80px;
+        left: -80px;
+        width: 200px;
+        height: 200px;
+        background: radial-gradient(circle, rgba(124,58,237,0.1) 0%, rgba(124,58,237,0) 70%);
+        pointer-events: none;
+        z-index: 0;
+        animation: pulse 5s infinite ease-in-out;
+    }
+    @keyframes pulse {
+        0% { transform: scale(0.95); opacity: 0.7; }
+        50% { transform: scale(1.1); opacity: 1; }
+        100% { transform: scale(0.95); opacity: 0.7; }
+    }
+    .preview-content {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        height: 100%;
+        position: relative;
+        z-index: 1;
+    }
+    .preview-image {
+        width: 120px;
+        height: auto;
+        object-fit: contain;
+        border-radius: var(--radius-md);
+        flex-shrink: 0;
+        align-self: center;
+    }
+    .preview-details {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        overflow-y: auto;
+        flex-grow: 1;
+        padding-right: 8px; /* For scrollbar */
+    }
+    .preview-name { font-size: 1.1rem; font-weight: 600; text-align: center;}
+    .preview-type { font-size: 0.9rem; color: var(--color-text-secondary); font-style: italic; display: none; }
+    .preview-desc { font-size: 0.85rem; line-height: 1.4; color: var(--color-text-primary); flex-grow: 1; white-space: pre-wrap; display:none; }
+    .preview-footer { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--color-border); flex-shrink: 0; }
+    .preview-price { font-size: 1.2rem; font-weight: 600; color: var(--color-violet); }
+
+    /* Insurance Modal Styles */
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(20, 20, 23, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity .3s, visibility .3s;
+    }
+    .modal-overlay.visible {
+        opacity: 1;
+        visibility: visible;
+    }
+    .modal-content {
+        background: var(--color-bg);
+        border-radius: var(--radius-lg);
+        padding: 28px;
+        width: 100%;
+        max-width: 420px;
+        box-shadow: 0 10px 25px -5px rgba(0,0,0,.1), 0 8px 10px -6px rgba(0,0,0,.1);
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        transform: scale(0.95);
+        transition: transform .3s;
+    }
+    .modal-overlay.visible .modal-content {
+        transform: scale(1);
+    }
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .modal-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+    .modal-close-btn {
+        background: none;
+        border: none;
+        font-size: 24px;
+        line-height: 1;
+        cursor: pointer;
+        color: var(--color-text-secondary);
+    }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="wide">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Créateur de Classeur Yu-Gi-Oh!</h1>
+
+      <div class="generator-card" role="region" aria-label="Créateur de Classeur">
+        <div class="binder-layout">
+          <!-- Search Panel -->
+          <div class="search-panel">
+            <div class="form-group">
+              <label for="card-search" class="form-label">Rechercher une carte</label>
+              <input type="search" id="card-search" class="form-input" placeholder="Ex: Magicien Sombre">
+            </div>
+            <div id="search-results" aria-live="polite">
+              <p class="status-text">Recherchez une carte pour commencer.</p>
+            </div>
+            <div id="card-preview">
+                <!-- JS will populate this -->
+            </div>
+          </div>
+          <!-- Binder Panel -->
+          <div class="binder-panel">
+            <div class="binder-header">
+                <h2 class="binder-title">Mon Classeur</h2>
+                <span id="binder-total-value"></span>
+                <div class="actions">
+                    <button id="export-stylish-btn" class="btn btn-secondary">Exporter Classeur</button>
+                    <button id="export-insurance-btn" class="btn btn-primary">Exporter Certificat</button>
+                </div>
+            </div>
+            <div id="binder-grid" class="binder-grid">
+              <!-- JS will populate slots -->
+            </div>
+            <div class="binder-pagination">
+                <button id="prev-page-btn" class="btn btn-secondary">&lt; Précédent</button>
+                <span id="page-info">Page 1 / 1</span>
+                <button id="next-page-btn" class="btn btn-secondary">Suivant &gt;</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  
+  <!-- Insurance Modal HTML -->
+  <div id="insurance-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modal-title" class="modal-title">Informations du propriétaire</h2>
+        <button id="modal-close-btn" class="modal-close-btn" aria-label="Fermer">&times;</button>
+      </div>
+      <form id="insurance-form">
+        <div class="form-group">
+          <label for="owner-firstname" class="form-label">Prénom</label>
+          <input type="text" id="owner-firstname" class="form-input" required>
+        </div>
+        <div class="form-group" style="margin-top: 16px;">
+          <label for="owner-lastname" class="form-label">Nom</label>
+          <input type="text" id="owner-lastname" class="form-input" required>
+        </div>
+        <div class="form-group" style="margin-top: 16px;">
+          <label for="owner-address" class="form-label">Adresse</label>
+          <input type="text" id="owner-address" class="form-input" required>
+        </div>
+        <div class="actions" style="margin-top: 24px;">
+          <button type="button" id="modal-cancel-btn" class="btn btn-secondary">Annuler</button>
+          <button type="submit" class="btn btn-primary">Générer le PDF</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <script>
+    // Background hex grid (unchanged)
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+        const size = 24, hexW = 2 * size, hexH = Math.sqrt(3) * size, stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)'; ctx.lineWidth = 1;
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX, y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){ const a = 2 * Math.PI / 6 * i, px = x + size * Math.cos(a), py = y + size * Math.sin(a); if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+
+    // YGO Binder Logic
+    document.addEventListener('DOMContentLoaded', () => {
+        const searchInput = document.getElementById('card-search');
+        const searchResultsContainer = document.getElementById('search-results');
+        const binderGrid = document.getElementById('binder-grid');
+        const prevPageBtn = document.getElementById('prev-page-btn');
+        const nextPageBtn = document.getElementById('next-page-btn');
+        const pageInfo = document.getElementById('page-info');
+        const exportStylishBtn = document.getElementById('export-stylish-btn');
+        const exportInsuranceBtn = document.getElementById('export-insurance-btn');
+        const totalValueEl = document.getElementById('binder-total-value');
+        const cardPreviewContainer = document.getElementById('card-preview');
+        
+        // Modal elements
+        const insuranceModal = document.getElementById('insurance-modal');
+        const insuranceForm = document.getElementById('insurance-form');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+        const modalCancelBtn = document.getElementById('modal-cancel-btn');
+
+
+        let binderCards = [];
+        let selectedCard = null;
+        let currentPage = 0;
+        const cardsPerPage = 9;
+        const maxIdenticalCards = 3;
+        let searchTimeout;
+        let lastSearchResults = [];
+
+        const API_URL = 'https://db.ygoprodeck.com/api/v7/cardinfo.php';
+
+        // --- SEARCH LOGIC ---
+        async function searchCards(query) {
+            if (query.length < 3) {
+                searchResultsContainer.innerHTML = '<p class="status-text">Tapez au moins 3 lettres.</p>';
+                return;
+            }
+            searchResultsContainer.innerHTML = '<div class="spinner"></div>';
+            try {
+                const response = await fetch(`${API_URL}?fname=${encodeURIComponent(query)}&language=fr`);
+                if (!response.ok) throw new Error('Network response was not ok.');
+                const data = await response.json();
+                lastSearchResults = data.data || [];
+                displaySearchResults(lastSearchResults);
+            } catch (error) {
+                console.error("Fetch error:", error);
+                lastSearchResults = [];
+                searchResultsContainer.innerHTML = '<p class="status-text">Erreur lors de la recherche. Veuillez réessayer.</p>';
+            }
+        }
+
+        function displaySearchResults(cards) {
+            searchResultsContainer.innerHTML = '';
+            if (!cards || cards.length === 0) {
+                searchResultsContainer.innerHTML = '<p class="status-text">Aucune carte trouvée.</p>';
+                return;
+            }
+            cards.slice(0, 50).forEach(card => {
+                const cardEl = document.createElement('div');
+                cardEl.className = 'card-result-item';
+                const price = parseFloat(card.card_prices?.[0]?.cardmarket_price || 0).toFixed(2);
+                const countInBinder = binderCards.filter(c => c.id === card.id).length;
+                const canAdd = countInBinder < maxIdenticalCards;
+
+                cardEl.innerHTML = `
+                    <img src="${card.card_images[0].image_url_small}" alt="${card.name}">
+                    <span class="card-name">${card.name}</span>
+                    <span class="card-price">${price} €</span>
+                    <button class="add-from-search-btn" ${!canAdd ? 'disabled' : ''}>
+                        ${!canAdd ? '✓' : '+'}
+                    </button>
+                `;
+                
+                cardEl.addEventListener('click', () => showCardPreview(card));
+                
+                const addBtn = cardEl.querySelector('.add-from-search-btn');
+                addBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const initialCount = binderCards.filter(c => c.id === card.id).length;
+                    addCardToBinder(card);
+                    const newCount = binderCards.filter(c => c.id === card.id).length;
+
+                    if (newCount > initialCount) {
+                        renderBinder();
+                        if (newCount >= maxIdenticalCards) {
+                            addBtn.textContent = '✓';
+                            addBtn.disabled = true;
+                        }
+                        if (selectedCard && selectedCard.id === card.id) {
+                            showCardPreview(card);
+                        }
+                    }
+                });
+
+                searchResultsContainer.appendChild(cardEl);
+            });
+        }
+
+        searchInput.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                searchCards(searchInput.value.trim());
+            }, 500);
+        });
+
+        // --- CARD PREVIEW LOGIC ---
+        function showCardPreview(card) {
+            selectedCard = card;
+            const countInBinder = binderCards.filter(c => c.id === card.id).length;
+            const isInBinder = countInBinder > 0;
+            const price = parseFloat(card.card_prices?.[0]?.cardmarket_price || 0).toFixed(2);
+
+            cardPreviewContainer.innerHTML = `
+                <div class="preview-content">
+                    <img src="${card.card_images[0].image_url}" alt="${card.name}" class="preview-image">
+                    <div class="preview-details">
+                        <h3 class="preview-name">${card.name}</h3>
+                        <p class="preview-type">${card.type}</p>
+                        <p class="preview-desc">${card.desc}</p>
+                        <div class="preview-footer">
+                            <span class="preview-price">${price} €</span>
+                            <button id="preview-action-btn" class="btn ${isInBinder ? 'btn-secondary' : 'btn-primary'}">
+                                ${isInBinder ? `Retirer du classeur (${countInBinder})` : 'Ajouter au classeur'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('preview-action-btn').addEventListener('click', () => {
+                if (isInBinder) {
+                    removeCardFromBinder(card.id);
+                } else {
+                    addCardToBinder(card);
+                }
+                showCardPreview(card);
+                renderBinder();
+                if (lastSearchResults.length > 0) {
+                  displaySearchResults(lastSearchResults);
+                }
+            });
+        }
+        
+        function clearCardPreview() {
+            cardPreviewContainer.innerHTML = '<p class="status-text">Sélectionnez une carte pour voir les détails.</p>';
+            selectedCard = null;
+        }
+
+        // --- BINDER LOGIC ---
+        function calculateTotalValue() {
+            return binderCards.reduce((sum, card) => {
+                const price = parseFloat(card.card_prices?.[0]?.cardmarket_price || 0);
+                return sum + price;
+            }, 0);
+        }
+
+        function updateTotalValue() {
+            const totalValue = calculateTotalValue();
+            totalValueEl.textContent = `Valeur: ${totalValue.toFixed(2)} €`;
+        }
+
+        function addCardToBinder(card) {
+            const count = binderCards.filter(c => c.id === card.id).length;
+            if (count < maxIdenticalCards) {
+                binderCards.push(card);
+            }
+        }
+        
+        function removeCardFromBinder(cardId) {
+            const cardIndex = binderCards.findIndex(c => c.id === cardId);
+            if (cardIndex > -1) {
+                binderCards.splice(cardIndex, 1);
+            }
+            const totalPages = Math.max(1, Math.ceil(binderCards.length / cardsPerPage));
+            if (currentPage >= totalPages) {
+                currentPage = totalPages - 1;
+            }
+            if (lastSearchResults.length > 0) {
+                displaySearchResults(lastSearchResults);
+            }
+        }
+
+        function renderBinder() {
+            binderGrid.innerHTML = '';
+            const totalPages = Math.max(1, Math.ceil(binderCards.length / cardsPerPage));
+            
+            currentPage = Math.max(0, Math.min(currentPage, totalPages - 1));
+
+            const start = currentPage * cardsPerPage;
+            const end = start + cardsPerPage;
+            const cardsToShow = binderCards.slice(start, end);
+
+            for (let i = 0; i < cardsPerPage; i++) {
+                const slot = document.createElement('div');
+                slot.className = 'binder-slot';
+                const card = cardsToShow[i];
+                if (card) {
+                    slot.innerHTML = `<img src="${card.card_images[0].image_url}" alt="${card.name}">`;
+                    slot.addEventListener('click', () => showCardPreview(card));
+                }
+                binderGrid.appendChild(slot);
+            }
+            pageInfo.textContent = `Page ${currentPage + 1} / ${totalPages}`;
+            prevPageBtn.disabled = currentPage === 0;
+            nextPageBtn.disabled = currentPage >= totalPages - 1;
+            updateTotalValue();
+        }
+
+        prevPageBtn.addEventListener('click', () => {
+            if (currentPage > 0) { currentPage--; renderBinder(); }
+        });
+
+        nextPageBtn.addEventListener('click', () => {
+            const totalPages = Math.ceil(binderCards.length / cardsPerPage);
+            if (currentPage < totalPages - 1) { currentPage++; renderBinder(); }
+        });
+        
+        // --- MODAL LOGIC ---
+        function openInsuranceModal() {
+            if (binderCards.length === 0) {
+                alert("Le classeur est vide.");
+                return;
+            }
+            insuranceModal.classList.add('visible');
+        }
+        function closeInsuranceModal() {
+            insuranceModal.classList.remove('visible');
+        }
+
+        exportInsuranceBtn.addEventListener('click', openInsuranceModal);
+        modalCloseBtn.addEventListener('click', closeInsuranceModal);
+        modalCancelBtn.addEventListener('click', closeInsuranceModal);
+        insuranceModal.addEventListener('click', (e) => {
+            if (e.target === insuranceModal) {
+                closeInsuranceModal();
+            }
+        });
+        insuranceForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const firstName = document.getElementById('owner-firstname').value;
+            const lastName = document.getElementById('owner-lastname').value;
+            const address = document.getElementById('owner-address').value;
+            generateInsurancePDF({ firstName, lastName, address });
+            closeInsuranceModal();
+            insuranceForm.reset();
+        });
+
+
+        // --- PDF EXPORT LOGIC ---
+        const { jsPDF } = window.jspdf;
+
+        function loadImage(url) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'Anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = (err) => reject(new Error(`Failed to load image: ${url}`));
+                img.src = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+            });
+        }
+
+        async function generateStylishPDF() {
+            if (binderCards.length === 0) {
+                alert("Le classeur est vide.");
+                return;
+            }
+            exportStylishBtn.disabled = true;
+            exportStylishBtn.textContent = 'Génération...';
+            try {
+                const doc = new jsPDF('p', 'mm', 'a4');
+                const totalPages = Math.ceil(binderCards.length / cardsPerPage);
+                const pageW = doc.internal.pageSize.getWidth();
+                const pageH = doc.internal.pageSize.getHeight();
+
+                for(let i = 0; i < totalPages; i++) {
+                    if (i > 0) doc.addPage();
+                    
+                    doc.setFillColor(245, 243, 255); // #F5F3FF
+                    doc.rect(0, 0, pageW, pageH, 'F');
+                    
+                    doc.setFontSize(22);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor('#141417');
+                    doc.text('Mon Classeur Yu-Gi-Oh!', pageW / 2, 20, { align: 'center' });
+
+                    const cardsOnPage = binderCards.slice(i * cardsPerPage, (i + 1) * cardsPerPage);
+                    const imagePromises = cardsOnPage.map(card => loadImage(card.card_images[0].image_url));
+                    const loadedImages = await Promise.all(imagePromises);
+
+                    const cardW = 60; const cardH = 87.5; const startX = 15; const startY = 35; const gap = 5;
+
+                    loadedImages.forEach((img, j) => {
+                        const row = Math.floor(j / 3);
+                        const col = j % 3;
+                        const x = startX + col * (cardW + gap);
+                        const y = startY + row * (cardH + gap);
+                        doc.addImage(img, 'JPEG', x, y, cardW, cardH);
+                    });
+                    
+                    doc.setFontSize(10);
+                    doc.setTextColor(150);
+                    doc.text(`Page ${i + 1} / ${totalPages + 1} - Généré par La Ruche`, pageW / 2, 285, { align: 'center' });
+                }
+
+                doc.addPage();
+                doc.setFillColor(245, 243, 255); // #F5F3FF
+                doc.rect(0, 0, pageW, pageH, 'F');
+                doc.setFontSize(22);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor('#141417');
+                doc.text('Résumé de la Valeur', pageW / 2, pageH / 2 - 20, { align: 'center' });
+                const totalValue = calculateTotalValue();
+                doc.setFontSize(28);
+                doc.setTextColor(124, 58, 237);
+                doc.text(`${totalValue.toFixed(2)} €`, pageW / 2, pageH / 2, { align: 'center' });
+                doc.setFontSize(12);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor('#6B7280');
+                doc.text('Valeur totale estimée basée sur les prix Cardmarket.', pageW / 2, pageH / 2 + 10, { align: 'center' });
+                doc.setFontSize(10);
+                doc.setTextColor(150);
+                doc.text(`Page ${totalPages + 1} / ${totalPages + 1} - Généré par La Ruche`, pageW / 2, 285, { align: 'center' });
+
+                doc.save('classeur-yugioh-style.pdf');
+            } catch (error) {
+                console.error("Stylish PDF generation failed:", error);
+                alert("La génération du PDF a échoué. Cela peut être dû à un problème de réseau. Veuillez réessayer.");
+            } finally {
+                exportStylishBtn.disabled = false;
+                exportStylishBtn.textContent = 'Exporter Classeur';
+            }
+        }
+
+        function generateInsurancePDF(ownerInfo) {
+            const doc = new jsPDF();
+            const USD_TO_JPY_RATE = 155; 
+            let totalEUR = 0, totalUSD = 0;
+            
+            const tableData = binderCards.map(card => {
+                const cardSet = card.card_sets?.[0];
+                const priceEUR = parseFloat(card.card_prices?.[0]?.cardmarket_price || 0);
+                const priceUSD = parseFloat(card.card_prices?.[0]?.tcgplayer_price || 0);
+                totalEUR += priceEUR;
+                totalUSD += priceUSD;
+                const priceJPY = priceUSD * USD_TO_JPY_RATE;
+                return [
+                    card.name,
+                    cardSet?.set_code || 'N/A',
+                    cardSet?.set_rarity || 'N/A',
+                    priceEUR > 0 ? priceEUR.toFixed(2) + ' €' : 'N/A',
+                    priceUSD > 0 ? priceUSD.toFixed(2) + ' $' : 'N/A',
+                    priceJPY > 0 ? priceJPY.toLocaleString('ja-JP') + ' ¥' : 'N/A',
+                ];
+            });
+            const totalJPY = totalUSD * USD_TO_JPY_RATE;
+
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.text("Certificat de Collection - La Ruche", 105, 20, { align: 'center' });
+            
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.text("Propriétaire de la collection:", 14, 35);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`${ownerInfo.firstName} ${ownerInfo.lastName}`, 14, 42);
+            doc.text(ownerInfo.address, 14, 49);
+            
+            doc.autoTable({
+                startY: 60,
+                head: [['Nom', 'Code', 'Rareté', 'Prix (€)', 'Prix ($)', 'Prix (¥)']],
+                body: tableData,
+                foot: [[
+                    { content: 'Valeur Totale', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: `${totalEUR.toFixed(2)} €`, styles: { fontStyle: 'bold' } },
+                    { content: `${totalUSD.toFixed(2)} $`, styles: { fontStyle: 'bold' } },
+                    { content: `${totalJPY.toLocaleString('ja-JP')} ¥`, styles: { fontStyle: 'bold' } },
+                ]],
+                theme: 'grid',
+                headStyles: { fillColor: [124, 58, 237] },
+                footStyles: { fillColor: [247, 248, 250], textColor: [20, 20, 23] },
+                didDrawPage: function(data) {
+                    const pageHeight = doc.internal.pageSize.getHeight();
+                    doc.setFontSize(9);
+                    doc.setTextColor(150);
+                    doc.text(`Généré le: ${new Date().toLocaleDateString('fr-FR')}`, data.settings.margin.left, pageHeight - 20);
+                    doc.text('Le prix en Yen (¥) est une estimation basée sur le cours du Dollar ($).', data.settings.margin.left, pageHeight - 15);
+                    doc.text('Ce document est un récapitulatif de collection et ne constitue pas une expertise de valeur.', data.settings.margin.left, pageHeight - 10);
+                }
+            });
+
+            doc.save('classeur-yugioh-assurance.pdf');
+        }
+
+        exportStylishBtn.addEventListener('click', generateStylishPDF);
+        
+        // Initial setup
+        clearCardPreview();
+        renderBinder();
+    });
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

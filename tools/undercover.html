@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>La Ruche - Jeu de l'Imposteur</title>
+  <meta name="description" content="Un jeu d'ambiance et de déduction sociale où vous devez démasquer l'imposteur qui possède un mot légèrement différent du vôtre.">
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root {
+      --color-bg: #FFFFFF;
+      --color-bg-alt: #F7F8FA;
+      --color-border: #E9EAF0;
+      --color-text-primary: #141417;
+      --color-text-secondary: #6B7280;
+      --color-violet: #7C3AED;
+      --color-violet-dark: #6D28D9;
+      --radius-md: 12px;
+      --radius-lg: 14px;
+      --tool-max-w: 480px; /* par défaut, peut être changé via body[data-size] */
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
+
+    html {
+      height: 100%;
+      background-color: var(--color-bg)
+    }
+
+    body {
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--color-text-primary);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body[data-size="default"] {
+      --tool-max-w: 480px
+    }
+
+    body[data-size="wide"] {
+      --tool-max-w: 960px
+    }
+
+    body[data-size="xl"] {
+      --tool-max-w: 1200px
+    }
+
+    #root {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #bg-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1
+    }
+
+    .app-header {
+      flex-shrink: 0;
+      background: var(--color-bg-alt);
+      border-bottom: 1px solid var(--color-border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      height: 70px;
+      position: relative;
+      z-index: 10;
+    }
+
+    .app-header a {
+      display: inline-flex;
+      align-items: center
+    }
+
+    .logo-img {
+      height: 70px;
+      width: auto;
+      vertical-align: middle
+    }
+
+    .main-content {
+      flex-grow: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 24px;
+      overflow-y: auto;
+    }
+
+    .tool-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative
+    }
+
+    .tool-title {
+      font-size: 1.75rem;
+      font-weight: 600;
+      padding: 12px 28px;
+      background: linear-gradient(45deg, var(--color-violet), var(--color-violet-dark));
+      color: #fff;
+      border-radius: var(--radius-md);
+      margin-bottom: -20px;
+      position: relative;
+      z-index: 5;
+      box-shadow: 0 4px 14px -4px rgba(124, 58, 237, .4);
+    }
+
+    .generator-card {
+      background: var(--color-bg);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      padding-top: 40px;
+      width: 100%;
+      max-width: var(--tool-max-w);
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px
+    }
+
+    .form-label {
+      font-weight: 500;
+      color: var(--color-text-primary)
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      font-size: 1rem;
+      color: var(--color-text-primary);
+      background: var(--color-bg);
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--color-violet);
+      box-shadow: 0 0 0 3px rgba(124, 58, 237, .2)
+    }
+
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-weight: 500;
+      padding: 10px 16px;
+      border-radius: var(--radius-md);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: background-color .2s, box-shadow .2s, border-color .2s, color .2s;
+      font-size: 14px;
+    }
+
+    .btn:focus-visible {
+      outline: 2px solid transparent;
+      outline-offset: 2px;
+      box-shadow: 0 0 0 3px rgba(124, 58, 237, .4)
+    }
+
+    .btn-primary {
+      background: var(--color-violet);
+      color: #fff
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--color-violet-dark)
+    }
+
+    .btn-primary:disabled {
+      background: #A78BFA;
+      cursor: not-allowed
+    }
+    
+    .btn-secondary {
+        background-color: var(--color-bg);
+        color: var(--color-violet);
+        border: 1px solid var(--color-violet);
+        font-weight: 600;
+    }
+    .btn-secondary:hover:not(:disabled) {
+        background-color: var(--color-violet);
+        color: #fff;
+        border-color: var(--color-violet);
+    }
+
+    .status-text {
+      font-size: 14px;
+      color: var(--color-text-secondary);
+      text-align: center;
+      min-height: 21px
+    }
+    
+    .player-card-button {
+      background-color: var(--color-bg);
+      border: 2px solid var(--color-violet);
+      color: var(--color-violet);
+      font-weight: 600;
+    }
+    .player-card-button:hover {
+      background-color: var(--color-violet);
+      border-color: var(--color-violet);
+      color: #fff;
+    }
+
+    .grid { display: grid; }
+    .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .gap-2 { gap: 0.5rem; }
+    .gap-4 { gap: 1rem; }
+    .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.5rem; }
+    .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 1rem; }
+    .p-2 { padding: 0.5rem; }
+    .p-4 { padding: 1rem; }
+    .p-8 { padding: 2rem; }
+    .pt-4 { padding-top: 1rem; }
+    .mt-2 { margin-top: 0.5rem; }
+    .mt-6 { margin-top: 1.5rem; }
+    .mb-2 { margin-bottom: 0.5rem; }
+    .mb-4 { margin-bottom: 1rem; }
+    .ml-2 { margin-left: 0.5rem; }
+    .w-full { width: 100%; }
+    .w-80 { width: 20rem; }
+    .h-5 { height: 1.25rem; }
+    .w-5 { width: 1.25rem; }
+    .h-8 { height: 2rem; }
+    .w-8 { width: 2rem; }
+    .flex { display: flex; }
+    .flex-col { flex-direction: column; }
+    .flex-grow { flex-grow: 1; }
+    .items-center { align-items: center; }
+    .justify-center { justify-content: center; }
+    .justify-between { justify-content: space-between; }
+    .fixed { position: fixed; }
+    .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+    .z-50 { z-index: 50; }
+    .bg-black { background-color: #000; }
+    .bg-opacity-75 { background-color: rgba(0,0,0,0.75); }
+    .bg-white { background-color: #fff; }
+    .bg-zinc-100 { background-color: #f4f4f5; }
+    .hover\:bg-\[\--color-violet\]:hover { background-color: var(--color-violet); }
+    .text-white { color: #fff; }
+    .hover\:text-white:hover { color: #fff; }
+    .rounded-lg { border-radius: var(--radius-lg); }
+    .text-sm { font-size: 0.875rem; }
+    .text-lg { font-size: 1.125rem; }
+    .text-xl { font-size: 1.25rem; }
+    .text-2xl { font-size: 1.5rem; }
+    .text-4xl { font-size: 2.25rem; }
+    .font-bold { font-weight: 700; }
+    .font-medium { font-weight: 500; }
+    .font-semibold { font-weight: 600; }
+    .text-center { text-align: center; }
+    .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .text-red-500 { color: #ef4444; }
+    .hover\:text-red-700:hover { color: #b91c1c; }
+    .bg-green-100 { background-color: #dcfce7; }
+    .bg-red-100 { background-color: #fee2e2; }
+    .text-green-600 { color: #16a34a; }
+    .text-red-600 { color: #dc2626; }
+    .shadow-xl { box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); }
+    .transition-colors { transition-property: color, background-color, border-color, text-decoration-color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+    .duration-200 { transition-duration: 200ms; }
+    .select-none { user-select: none; }
+    
+    @media (min-width: 768px) {
+      .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (min-width: 1024px) {
+      .lg\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="wide">
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+  
+  <div id="root"></div>
+  <canvas id="bg-canvas"></canvas>
+
+  <script type="text/babel" data-type="module">
+    import React, { useState, useCallback } from 'react';
+    import ReactDOM from 'react-dom/client';
+
+    // --- FROM types.ts ---
+    const Role = {
+        Civilian: 'Civilian',
+        Undercover: 'Undercover',
+    };
+    const GameState = {
+        Setup: 'SETUP',
+        Reveal: 'REVEAL',
+        Voting: 'VOTING',
+        Result: 'RESULT',
+    };
+
+    // --- FROM constants.ts ---
+    const WORD_PAIRS = [
+      ["Soleil", "Étoile"], ["Chat", "Tigre"], ["Pomme", "Poire"], ["Livre", "Magazine"],
+      ["Voiture", "Camion"], ["Piano", "Guitare"], ["Plage", "Désert"], ["Hiver", "Automne"],
+      ["Café", "Thé"], ["Rivière", "Océan"], ["Montagne", "Colline"], ["Film", "Série"],
+      ["Pain", "Baguette"], ["Fromage", "Yaourt"], ["Avion", "Hélicoptère"], ["Bateau", "Navire"],
+      ["Forêt", "Jungle"], ["Maison", "Appartement"], ["Chaise", "Tabouret"], ["Table", "Bureau"],
+      ["Couteau", "Sabre"], ["Cuillère", "Fourchette"], ["Lune", "Planète"], ["Chien", "Loup"],
+      ["Cheval", "Zèbre"], ["Orange", "Citron"], ["Fraise", "Framboise"], ["Robe", "Jupe"],
+      ["Chemise", "T-shirt"], ["Pantalon", "Short"], ["École", "Université"], ["Hôpital", "Clinique"],
+      ["Police", "Gendarmerie"], ["Feu", "Incendie"], ["Eau", "Glace"], ["Vent", "Tornade"],
+      ["Amour", "Amitié"], ["Joie", "Bonheur"], ["Tristesse", "Mélancolie"], ["Peur", "Anxiété"],
+      ["Musique", "Chanson"], ["Danse", "Ballet"], ["Peinture", "Dessin"], ["Photo", "Image"],
+      ["Vin", "Bière"], ["Jardin", "Parc"], ["Fleur", "Arbre"], ["Téléphone", "Smartphone"],
+      ["Ordinateur", "Tablette"], ["Clavier", "Souris"], ["Tête", "Cerveau"], ["Main", "Doigt"],
+      ["Pied", "Orteil"], ["Coeur", "Âme"], ["Lettre", "Email"], ["Pont", "Tunnel"],
+      ["Route", "Autoroute"], ["Train", "Métro"], ["Bus", "Tramway"], ["Velo", "Moto"],
+      ["Roi", "Président"], ["Reine", "Princesse"], ["Château", "Palais"], ["Guerre", "Bataille"],
+      ["Paix", "Trêve"], ["Rêve", "Cauchemar"], ["Sommeil", "Sieste"], ["Matin", "Soir"],
+      ["Jour", "Nuit"], ["Bébé", "Enfant"], ["Adulte", "Vieillard"], ["Médecin", "Chirurgien"],
+      ["Professeur", "Maître"], ["Élève", "Étudiant"], ["Client", "Patient"], ["Or", "Argent"],
+      ["Diamant", "Rubis"], ["Football", "Rugby"], ["Tennis", "Badminton"], ["Piscine", "Lac"],
+      ["Neige", "Pluie"], ["Nuage", "Brouillard"], ["Chocolat", "Caramel"], ["Bonbon", "Sucette"],
+      ["Gâteau", "Tarte"], ["Pizza", "Quiche"], ["Pâtes", "Riz"], ["Fantôme", "Esprit"],
+      ["Sorcier", "Magicien"], ["Dragon", "Dinosaure"], ["Licorne", "Pégase"], ["Ange", "Démon"],
+      ["Paradis", "Enfer"], ["Violon", "Violoncelle"], ["Flûte", "Clarinette"]
+    ];
+
+    // --- FROM App.tsx ---
+    const shuffleArray = (array) => {
+      const newArray = [...array];
+      for (let i = newArray.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+      }
+      return newArray;
+    };
+
+    const UserIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+        </svg>
+    );
+
+    const EyeIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+            <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+        </svg>
+    );
+
+    const TrophyIcon = () => (
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
+          <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+          <path d="M8 21l8 0" />
+          <path d="M12 17l0 4" />
+          <path d="M7 4l10 0" />
+          <path d="M17 4v8a5 5 0 0 1 -10 0v-8" />
+          <path d="M5 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+          <path d="M15 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+      </svg>
+    );
+
+    const ImpostorIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
+          <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M10 16.5l2 -3l2 3" />
+          <line x1="10" y1="10" x2="10.01" y2="10" />
+          <line x1="14" y1="10" x2="14.01" y2="10" />
+        </svg>
+    );
+
+    const App = () => {
+        const [gameState, setGameState] = useState(GameState.Setup);
+        const [players, setPlayers] = useState([]);
+        const [newPlayerName, setNewPlayerName] = useState('');
+        const [roles, setRoles] = useState({});
+        const [activePlayers, setActivePlayers] = useState([]);
+        const [votedPlayer, setVotedPlayer] = useState(null);
+        const [revealedPlayer, setRevealedPlayer] = useState(null);
+
+        const handleAddPlayer = (e) => {
+            e.preventDefault();
+            if (newPlayerName.trim() && !players.includes(newPlayerName.trim())) {
+                setPlayers([...players, newPlayerName.trim()]);
+                setNewPlayerName('');
+            }
+        };
+        
+        const removePlayer = (playerToRemove) => {
+            setPlayers(players.filter(p => p !== playerToRemove));
+        };
+        
+        const resetGame = () => {
+            setGameState(GameState.Setup);
+            setPlayers([]);
+            setNewPlayerName('');
+            setRoles({});
+            setActivePlayers([]);
+            setVotedPlayer(null);
+            setRevealedPlayer(null);
+        };
+
+        const startGame = useCallback(() => {
+            if (players.length < 3) return;
+
+            const shuffledPlayers = shuffleArray(players);
+            const [word1, word2] = WORD_PAIRS[Math.floor(Math.random() * WORD_PAIRS.length)];
+            const undercoverPlayer = shuffledPlayers[0];
+            
+            const newRoles = {};
+            shuffledPlayers.forEach(player => {
+                if (player === undercoverPlayer) {
+                    newRoles[player] = { word: word2, role: Role.Undercover };
+                } else {
+                    newRoles[player] = { word: word1, role: Role.Civilian };
+                }
+            });
+            
+            setRoles(newRoles);
+            setActivePlayers(shuffledPlayers);
+            setVotedPlayer(null);
+            setRevealedPlayer(null);
+            setGameState(GameState.Reveal);
+        }, [players]);
+
+        const handleVote = (playerToVoteOut) => {
+            setVotedPlayer(playerToVoteOut);
+            setGameState(GameState.Result);
+        };
+
+        const handleNextRound = () => {
+            if (!votedPlayer) return;
+            const remainingPlayers = activePlayers.filter(p => p !== votedPlayer);
+            setActivePlayers(remainingPlayers);
+            setVotedPlayer(null);
+            setGameState(GameState.Voting);
+        };
+
+        const renderContent = () => {
+            switch (gameState) {
+                case GameState.Setup:
+                    return (
+                        <>
+                            <div className="form-group">
+                                <label htmlFor="player-name" className="form-label">Nom du joueur</label>
+                                <form onSubmit={handleAddPlayer} className="flex gap-2">
+                                    <input
+                                        id="player-name"
+                                        type="text"
+                                        value={newPlayerName}
+                                        onChange={(e) => setNewPlayerName(e.target.value)}
+                                        placeholder="Ajouter un participant..."
+                                        className="form-input flex-grow"
+                                    />
+                                    <button type="submit" className="btn btn-primary" disabled={!newPlayerName.trim()}>Ajouter</button>
+                                </form>
+                            </div>
+                            <div className="space-y-2">
+                                <h3 className="font-medium text-lg">Joueurs ({players.length})</h3>
+                                {players.length > 0 ? (
+                                    <ul className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                        {players.map(player => (
+                                            <li key={player} className="flex items-center justify-between bg-zinc-100 p-2 rounded-lg text-sm">
+                                                <span className="truncate">{player}</span>
+                                                <button onClick={() => removePlayer(player)} className="text-red-500 hover:text-red-700 ml-2 font-bold">&times;</button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="status-text">Ajoutez au moins 3 joueurs pour commencer.</p>
+                                )}
+                            </div>
+                            <div className="actions">
+                                <button onClick={startGame} className="btn btn-primary w-full" disabled={players.length < 3}>
+                                    Lancer la partie
+                                </button>
+                            </div>
+                        </>
+                    );
+                case GameState.Reveal:
+                    return (
+                        <>
+                            {revealedPlayer && roles[revealedPlayer] ? (
+                                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" onClick={() => setRevealedPlayer(null)}>
+                                    <div className="bg-white p-8 rounded-lg text-center shadow-xl w-80" onClick={e => e.stopPropagation()}>
+                                        <h2 className="text-2xl font-bold mb-2">{revealedPlayer}</h2>
+                                        <p className="text-lg mb-4">Votre mot est :</p>
+                                        <p className="text-4xl font-bold text-[--color-violet] p-4 bg-zinc-100 rounded-lg select-none">{roles[revealedPlayer].word}</p>
+                                        <button onClick={() => setRevealedPlayer(null)} className="btn btn-primary mt-6 w-full">Cacher</button>
+                                    </div>
+                                </div>
+                            ) : null}
+                            <div className="text-center">
+                                <h2 className="text-xl font-semibold">Distribution des rôles</h2>
+                                <p className="status-text">Chacun son tour, cliquez sur votre nom pour découvrir votre mot secret. Ne le montrez à personne !</p>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                {activePlayers.map(player => (
+                                    <button key={player} onClick={() => setRevealedPlayer(player)} className="p-4 rounded-lg transition-colors duration-200 flex flex-col items-center gap-2 player-card-button">
+                                        <UserIcon />
+                                        <span className="truncate">{player}</span>
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="actions">
+                                <button onClick={() => setGameState(GameState.Voting)} className="btn btn-primary w-full">
+                                    <EyeIcon />
+                                    Tout le monde a vu son mot, commencer à voter
+                                </button>
+                            </div>
+                        </>
+                    );
+                case GameState.Voting:
+                    return (
+                         <>
+                            <div className="text-center">
+                                <h2 className="text-xl font-semibold">Qui est l'imposteur ?</h2>
+                                <p className="status-text">Discutez, puis votez unanimement pour éliminer un joueur.</p>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                {activePlayers.map(player => (
+                                    <button key={player} onClick={() => handleVote(player)} className="p-4 rounded-lg hover:bg-[--color-violet] hover:text-white transition-colors duration-200 flex flex-col items-center gap-2 player-card-button">
+                                        <UserIcon />
+                                        <span className="truncate">{player}</span>
+                                    </button>
+                                ))}
+                            </div>
+                         </>
+                    );
+                case GameState.Result:
+                     if (!votedPlayer) return null;
+                     const votedRole = roles[votedPlayer].role;
+                     const isUndercover = votedRole === Role.Undercover;
+                     const civiliansWin = isUndercover;
+                     const remainingCivilians = activePlayers.filter(p => p !== votedPlayer && roles[p].role === Role.Civilian).length;
+                     const undercoverWins = !isUndercover && remainingCivilians <= 1;
+
+                     return (
+                        <div className="text-center space-y-4">
+                            <h2 className="text-xl font-semibold">Résultat du vote</h2>
+                            <div className={`p-4 rounded-lg ${isUndercover ? 'bg-green-100' : 'bg-red-100'}`}>
+                                <p className="text-lg">Vous avez éliminé <span className="font-bold">{votedPlayer}</span>.</p>
+                                <p className="text-2xl font-bold mt-2">
+                                    {isUndercover ? 'C\'était l\'imposteur !' : 'C\'était un civil...'}
+                                </p>
+                            </div>
+
+                            {(civiliansWin || undercoverWins) ? (
+                                <div className="space-y-2">
+                                    <h3 className={`text-2xl font-bold flex items-center justify-center gap-2 ${civiliansWin ? 'text-green-600' : 'text-red-600'}`}>
+                                        {civiliansWin ? 
+                                            <><TrophyIcon /><span>Les civils ont gagné !</span></> : 
+                                            <><ImpostorIcon /><span>L'imposteur a gagné !</span></>
+                                        }
+                                    </h3>
+                                    <p>Le mot des civils était : <span className="font-semibold">{Object.values(roles).find((r) => r.role === Role.Civilian)?.word}</span></p>
+                                    <p>Le mot de l'imposteur était : <span className="font-semibold">{Object.values(roles).find((r) => r.role === Role.Undercover)?.word}</span></p>
+                                    <div className="flex justify-center gap-4 pt-4">
+                                         <button onClick={startGame} className="btn btn-primary">Rejouer avec les mêmes joueurs</button>
+                                         <button onClick={resetGame} className="btn btn-secondary">Nouvelle partie</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                   <p className="status-text">Le jeu continue avec les joueurs restants.</p>
+                                   <button onClick={handleNextRound} className="btn btn-primary w-full">Prochain tour de vote</button>
+                                </div>
+                            )}
+                        </div>
+                     );
+            }
+        };
+
+        return (
+            <div className="main-content">
+                <div className="tool-wrapper">
+                    <h1 className="tool-title">Jeu de l'Imposteur</h1>
+                    <div className="generator-card" role="region" aria-label="Jeu de l'Imposteur">
+                        {renderContent()}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // --- FROM index.tsx ---
+    const rootElement = document.getElementById('root');
+    if (!rootElement) {
+      throw new Error("Could not find root element to mount to");
+    }
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    );
+
+  </script>
+  <script>
+    // Background hex grid — NE PAS MODIFIER (doit rester visuellement identique)
+    (function() {
+      const c = document.getElementById('bg-canvas');
+      if (!c) return;
+      const ctx = c.getContext('2d');
+
+      function draw() {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr;
+        c.height = rect.height * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, rect.width, rect.height);
+
+        const size = 24; // identique
+        const hexW = 2 * size; // identique
+        const hexH = Math.sqrt(3) * size; // identique
+        const stepX = hexW * 3 / 4; // identique
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)'; // identique
+        ctx.lineWidth = 1; // identique
+
+        for (let row = 0; row * hexH < rect.height + hexH; row++) {
+          for (let col = 0; col * stepX < rect.width + hexW; col++) {
+            const x = col * stepX;
+            const y = row * hexH + (col % 2 ? hexH / 2 : 0);
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+              const a = 2 * Math.PI / 6 * i;
+              const px = x + size * Math.cos(a);
+              const py = y + size * Math.sin(a);
+              if (i === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {
+        passive: true
+      });
+      draw();
+    })();
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

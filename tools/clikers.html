@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche" >
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test de Vitesse de Clic</title>
+  <meta name="description" content="Testez votre vitesse de clic en 5 secondes et découvrez votre score en Clics Par Seconde (CPS).">
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px; /* par défaut, peut être changé via body[data-size] */
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:center; justify-content:center;
+      padding:48px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:500; padding:10px 16px; border-radius:var(--radius-md); border:none; cursor:pointer;
+      transition:background-color .2s, box-shadow .2s; font-size:14px;
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn-primary{background:var(--color-violet); color:#fff}
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark)}
+    .btn-primary:disabled{background:#A78BFA; cursor:not-allowed}
+    
+    /* Styles spécifiques au Clicker Test */
+    .clicker-area {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+      background-color: var(--color-bg-alt);
+      border: 2px dashed var(--color-border);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      text-align: center;
+      padding: 20px;
+      transition: background-color 0.2s, transform 0.1s;
+      user-select: none; /* Empêcher la sélection de texte */
+      position: relative;
+    }
+    .clicker-area.running {
+      background-color: #f0ebfe;
+      border-style: solid;
+      border-color: var(--color-violet);
+    }
+    .clicker-area.click-effect {
+      transform: scale(0.98);
+    }
+    .clicker-area:focus {
+      outline: none;
+      border-color: var(--color-violet);
+      box-shadow:0 0 0 3px rgba(124,58,237,.2);
+    }
+
+    .clicker-text {
+      font-size: 1.5rem;
+      font-weight: 500;
+      color: var(--color-text-secondary);
+    }
+    .clicker-area.running .clicker-text {
+      color: var(--color-violet);
+      font-weight: 600;
+    }
+
+    .stats-bar {
+      display: flex;
+      justify-content: space-between;
+      background-color: var(--color-bg-alt);
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      font-size: 1rem;
+    }
+    .stat {
+      color: var(--color-text-primary);
+    }
+    .stat-label {
+      color: var(--color-text-secondary);
+      margin-right: 8px;
+    }
+    .stat-value {
+      font-weight: 600;
+      min-width: 50px;
+      display: inline-block;
+      text-align: right;
+    }
+
+    .results-screen {
+      text-align: center;
+    }
+    .results-title {
+      font-size: 1rem;
+      color: var(--color-text-secondary);
+      margin-bottom: 4px;
+    }
+    .results-cps {
+      font-size: 3rem;
+      font-weight: 700;
+      color: var(--color-violet);
+      line-height: 1.1;
+    }
+    .results-cps-label {
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--color-text-primary);
+    }
+    .results-details {
+      margin-top: 16px;
+      font-size: 1rem;
+      color: var(--color-text-secondary);
+    }
+    .results-performance {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--color-text-primary);
+        margin-top: 16px;
+        margin-bottom: 24px;
+    }
+
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="default">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Test de Vitesse de Clic</h1>
+
+      <!-- ZONE OUTIL -->
+      <div class="generator-card" role="region" aria-label="Test de Vitesse de Clic">
+        <div id="clickerArea" class="clicker-area" tabindex="0" role="button" aria-label="Zone de clic, cliquez pour démarrer le test">
+          <div id="startScreen">
+            <p class="clicker-text">Cliquez pour démarrer</p>
+          </div>
+          <div id="gameScreen" style="display: none;">
+            <p class="clicker-text">Cliquez !</p>
+          </div>
+          <div id="resultsScreen" style="display: none;">
+            <div class="results-screen">
+                <div class="results-title">Votre score</div>
+                <div class="results-cps"><span id="cpsValue">0.0</span></div>
+                <div class="results-cps-label">Clics par seconde</div>
+                <p class="results-performance" id="performanceTitle">Tortue Tranquille</p>
+                <button id="restartBtn" class="btn btn-primary">Recommencer</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="stats-bar">
+          <div class="stat">
+            <span class="stat-label">Temps restant:</span>
+            <span class="stat-value" id="timerValue">5.00s</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Clics:</span>
+            <span class="stat-value" id="clicksValue">0</span>
+          </div>
+        </div>
+      </div>
+      <!-- /ZONE OUTIL -->
+    </div>
+  </main>
+
+  <script>
+    // Background hex grid
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+        const size = 24, hexW = 2 * size, hexH = Math.sqrt(3) * size, stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)'; ctx.lineWidth = 1;
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX, y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){ const a = 2 * Math.PI / 6 * i, px = x + size * Math.cos(a), py = y + size * Math.sin(a); if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+
+    // Logique du Clicker Test
+    document.addEventListener('DOMContentLoaded', () => {
+        const TEST_DURATION = 5; // seconds
+
+        const clickerArea = document.getElementById('clickerArea');
+        const startScreen = document.getElementById('startScreen');
+        const gameScreen = document.getElementById('gameScreen');
+        const resultsScreen = document.getElementById('resultsScreen');
+        
+        const timerValue = document.getElementById('timerValue');
+        const clicksValue = document.getElementById('clicksValue');
+        const cpsValue = document.getElementById('cpsValue');
+        const performanceTitle = document.getElementById('performanceTitle');
+        const restartBtn = document.getElementById('restartBtn');
+
+        let clickCount = 0;
+        let timeLeft = TEST_DURATION;
+        let gameState = 'ready'; // 'ready', 'running', 'finished'
+        let timerInterval = null;
+
+        function updateUI() {
+            startScreen.style.display = gameState === 'ready' ? 'block' : 'none';
+            gameScreen.style.display = gameState === 'running' ? 'block' : 'none';
+            resultsScreen.style.display = gameState === 'finished' ? 'block' : 'none';
+
+            if (gameState === 'running') {
+                clickerArea.classList.add('running');
+            } else {
+                clickerArea.classList.remove('running');
+            }
+        }
+
+        function getPerformanceTitle(cps) {
+            if (cps < 4) return "Tortue Tranquille";
+            if (cps < 6) return "Paresseux Vif";
+            if (cps < 8) return "Guépard Agile";
+            if (cps < 10) return "Faucon Pèlerin";
+            return "Vitesse Lumière !";
+        }
+
+        function startGame() {
+            clickCount = 0;
+            timeLeft = TEST_DURATION;
+            gameState = 'running';
+
+            clicksValue.textContent = clickCount;
+            timerValue.textContent = timeLeft.toFixed(2) + 's';
+
+            updateUI();
+            clickerArea.focus();
+
+            timerInterval = setInterval(() => {
+                timeLeft -= 0.01;
+                timerValue.textContent = timeLeft.toFixed(2) + 's';
+                if (timeLeft <= 0) {
+                    endGame();
+                }
+            }, 10);
+        }
+
+        function endGame() {
+            clearInterval(timerInterval);
+            gameState = 'finished';
+            timerValue.textContent = '0.00s';
+            
+            const cps = (clickCount / TEST_DURATION).toFixed(1);
+            cpsValue.textContent = cps;
+            performanceTitle.textContent = getPerformanceTitle(parseFloat(cps));
+
+            updateUI();
+        }
+
+        function resetGame() {
+            gameState = 'ready';
+            clickCount = 0;
+            timeLeft = TEST_DURATION;
+            clicksValue.textContent = '0';
+            timerValue.textContent = timeLeft.toFixed(2) + 's';
+            updateUI();
+        }
+
+        function handleClick() {
+            if (gameState === 'ready') {
+                startGame();
+                // Premier clic compte
+                clickCount++;
+                clicksValue.textContent = clickCount;
+            } else if (gameState === 'running') {
+                clickCount++;
+                clicksValue.textContent = clickCount;
+
+                // Effet visuel
+                clickerArea.classList.add('click-effect');
+                setTimeout(() => clickerArea.classList.remove('click-effect'), 50);
+            }
+        }
+
+        clickerArea.addEventListener('mousedown', (e) => {
+            if(e.button === 0) { // Uniquement clic gauche
+               handleClick();
+            }
+        });
+
+        // Pour l'accessibilité au clavier
+        clickerArea.addEventListener('keydown', (e) => {
+             if (e.code === 'Space' || e.code === 'Enter') {
+                e.preventDefault();
+                handleClick();
+            }
+        });
+        
+        restartBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Empêche le clic de se propager à clickerArea
+            resetGame();
+        });
+
+        // Initialisation
+        resetGame();
+    });
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

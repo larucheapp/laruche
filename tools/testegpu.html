@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche" >
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapport de Performance de l'Appareil</title>
+  <meta name="description" content="Un outil de benchmark qui analyse les performances de votre système (CPU, GPU, RAM, réseau) et génère un rapport détaillé et exportable en PDF.">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px; /* par défaut, peut être changé via body[data-size] */
+      --gauge-size: 120px;
+      --gauge-bg: #E9EAF0;
+      --gauge-fg: var(--color-violet);
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:center; justify-content:center;
+      padding:48px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative; width:100%; max-width:var(--tool-max-w);}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%;
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+    .actions{display:flex; justify-content:flex-end; gap:12px}
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:500; padding:10px 16px; border-radius:var(--radius-md); border:none; cursor:pointer;
+      transition:background-color .2s, box-shadow .2s; font-size:14px;
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn-primary{background:var(--color-violet); color:#fff}
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark)}
+    .btn-primary:disabled{background:#A78BFA; cursor:not-allowed}
+    .hidden { display: none !important; }
+
+    /* --- Styles spécifiques --- */
+    .welcome-view {
+      text-align: center;
+      padding: 32px;
+    }
+    .welcome-view h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 8px; }
+    .welcome-view p { color: var(--color-text-secondary); margin-bottom: 24px; }
+    
+    .analysis-view {
+      align-items: center;
+      text-align: center;
+      padding: 32px;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 12px;
+      background-color: var(--color-border);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .progress-bar-inner {
+      width: 0;
+      height: 100%;
+      background: linear-gradient(90deg, var(--color-violet), var(--color-violet-dark));
+      border-radius: 6px;
+      transition: width 0.3s ease-in-out;
+    }
+    #analysis-status {
+      font-weight: 500;
+      min-height: 24px;
+      color: var(--color-text-secondary);
+    }
+
+    #report-view .actions {
+      border-top: 1px solid var(--color-border);
+      padding-top: 24px;
+      margin-top: 8px;
+    }
+    
+    .report-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+    .report-item {
+      background: var(--color-bg-alt);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+    }
+    .report-item-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .report-item-header .icon {
+      width: 24px; height: 24px;
+      color: var(--color-violet);
+    }
+    .report-item-header h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    .report-item ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+     .report-item li {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.95rem;
+    }
+    .report-item .label {
+      color: var(--color-text-secondary);
+    }
+    .report-item .value {
+      font-weight: 500;
+      text-align: right;
+    }
+    .gauge-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+    }
+    .gauge {
+        width: var(--gauge-size);
+        height: var(--gauge-size);
+        border-radius: 50%;
+        position: relative;
+        background-color: var(--gauge-bg);
+        background-image: conic-gradient(var(--gauge-fg) calc(var(--value, 0) * 1%), var(--gauge-bg) 0);
+        transition: --value 1.5s cubic-bezier(0.25, 1, 0.5, 1), background-image 1.5s cubic-bezier(0.25, 1, 0.5, 1);
+        animation: gauge-pop-in 0.5s ease-out forwards;
+    }
+     @property --value {
+      syntax: '<integer>';
+      initial-value: 0;
+      inherits: false;
+    }
+    @keyframes gauge-pop-in {
+      from { transform: scale(0.5); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .gauge::before {
+        content: '';
+        position: absolute;
+        inset: 10px;
+        background: var(--color-bg-alt);
+        border-radius: 50%;
+    }
+    .gauge-value {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 1.5rem;
+        color: var(--color-text-primary);
+    }
+    .gauge-value small {
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: var(--color-text-secondary);
+    }
+
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="xl">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Rapport de Performance</h1>
+
+      <!-- ZONE OUTIL -->
+      <div id="welcome-view" class="generator-card welcome-view" role="region">
+        <h2>Analysez les performances de votre appareil</h2>
+        <p>Obtenez un rapport détaillé sur les composants clés de votre système : CPU, GPU, mémoire, réseau et plus encore.</p>
+        <button id="start-btn" class="btn btn-primary btn-large" style="padding: 12px 24px; font-size: 1rem;">
+          Lancer l'analyse
+        </button>
+      </div>
+
+      <div id="analysis-view" class="generator-card analysis-view hidden" role="region" aria-live="polite">
+          <h2>Analyse en cours...</h2>
+          <div class="progress-bar">
+              <div id="progress-bar-inner" class="progress-bar-inner"></div>
+          </div>
+          <p id="analysis-status">Initialisation...</p>
+      </div>
+
+      <div id="report-view" class="generator-card hidden" role="region">
+          <div id="report-content-wrapper">
+              <div id="report-content" class="report-grid">
+                  <!-- Les résultats seront injectés ici -->
+              </div>
+          </div>
+          <div class="actions">
+              <button id="export-pdf-btn" class="btn btn-primary">Exporter en PDF</button>
+          </div>
+      </div>
+      <!-- /ZONE OUTIL -->
+    </div>
+  </main>
+
+  <script>
+    // Background hex grid
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+        const size = 24, hexW = 2 * size, hexH = Math.sqrt(3) * size, stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)'; ctx.lineWidth = 1;
+        for(let r=0; r*hexH < rect.height+hexH; r++){
+          for(let col=0; col*stepX < rect.width+hexW; col++){
+            const x = col * stepX, y = r*hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0; i<6; i++){ const a=2*Math.PI/6*i, px=x+size*Math.cos(a), py=y+size*Math.sin(a); if(i===0)ctx.moveTo(px,py); else ctx.lineTo(px,py); }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+
+    // --- App Logic ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const { jsPDF } = window.jspdf;
+
+        const welcomeView = document.getElementById('welcome-view');
+        const analysisView = document.getElementById('analysis-view');
+        const reportView = document.getElementById('report-view');
+        
+        const startBtn = document.getElementById('start-btn');
+        const exportPdfBtn = document.getElementById('export-pdf-btn');
+
+        const progressBar = document.getElementById('progress-bar-inner');
+        const analysisStatus = document.getElementById('analysis-status');
+        const reportContent = document.getElementById('report-content');
+        const mainContentEl = document.querySelector('.main-content');
+
+        startBtn.addEventListener('click', runAnalysis);
+        exportPdfBtn.addEventListener('click', generatePdf);
+
+        const tasks = [
+            { name: "Informations Système", fn: getSystemInfo, weight: 1 },
+            { name: "Analyse du CPU", fn: getCpuInfo, weight: 3 },
+            { name: "Analyse de la mémoire", fn: getMemoryInfo, weight: 1 },
+            { name: "Analyse du réseau", fn: getNetworkInfo, weight: 3 },
+            { name: "Analyse du GPU", fn: getGpuInfo, weight: 4 },
+            { name: "Informations d'affichage", fn: getDisplayInfo, weight: 1 }
+        ];
+
+        async function runAnalysis() {
+            welcomeView.classList.add('hidden');
+            analysisView.classList.remove('hidden');
+
+            const totalWeight = tasks.reduce((sum, task) => sum + task.weight, 0);
+            let completedWeight = 0;
+            const results = {};
+
+            for (const task of tasks) {
+                analysisStatus.textContent = `${task.name}...`;
+                try {
+                    const result = await task.fn();
+                    Object.assign(results, result);
+                } catch (error) {
+                    console.error(`Erreur durant ${task.name}:`, error);
+                    Object.assign(results, { [task.name.toLowerCase().replace(/ /g,'_')]: { Error: "Impossible de récupérer les données" } });
+                }
+                completedWeight += task.weight;
+                progressBar.style.width = `${(completedWeight / totalWeight) * 100}%`;
+            }
+            
+            analysisStatus.textContent = 'Génération du rapport...';
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            displayReport(results);
+            
+            mainContentEl.scrollTop = 0;
+
+            analysisView.classList.add('hidden');
+            reportView.classList.remove('hidden');
+        }
+
+        // --- Fonctions de collecte ---
+        async function getSystemInfo() {
+            return {
+                system: {
+                    'Navigateur': navigator.userAgentData?.brands.map(b => `${b.brand} ${b.version}`).join(', ') || navigator.userAgent.split(') ')[0] + ')',
+                    'Plateforme': navigator.userAgentData?.platform || navigator.platform,
+                    'Langue': navigator.language,
+                }
+            };
+        }
+
+        async function getCpuInfo() {
+            const cores = navigator.hardwareConcurrency || 'N/A';
+            const startTime = performance.now();
+            let result = 0;
+            for (let i = Math.pow(10, 7); i > 0; i--) {
+                result += Math.tan(i) * Math.sin(i);
+            }
+            const duration = performance.now() - startTime;
+            const score = Math.max(0, Math.min(100, Math.round(50000 / duration)));
+            return {
+                cpu: {
+                    'Coeurs logiques': cores,
+                    'Temps de calcul (ms)': duration.toFixed(2),
+                    'Score de performance': score,
+                }
+            };
+        }
+        
+        async function getMemoryInfo() {
+            const memory = performance.memory || {};
+            return {
+                memory: {
+                    'Limite mémoire JS (Mo)': memory.jsHeapSizeLimit ? (memory.jsHeapSizeLimit / 1048576).toFixed(2) : 'N/A',
+                }
+            };
+        }
+
+        async function getNetworkInfo() {
+            const imageAddr = "https://upload.wikimedia.org/wikipedia/commons/2/2d/Snake_River_%285mb%29.jpg" + "?n=" + Math.random();
+            const downloadSize = 5245329; // bytes
+            const startTime = performance.now();
+            
+            try {
+                const response = await fetch(imageAddr, { mode: 'cors', cache: 'no-store' });
+                if (!response.ok) throw new Error('Network response was not ok');
+                await response.blob();
+                const duration = (performance.now() - startTime) / 1000;
+                const bitsLoaded = downloadSize * 8;
+                const speedBps = bitsLoaded / duration;
+                const speedMbps = (speedBps / 1000 / 1000).toFixed(2);
+                const score = Math.max(0, Math.min(100, Math.round(speedMbps * 2)));
+
+                return {
+                    network: {
+                        'Vitesse de DL (Mbps)': speedMbps,
+                        'Temps de test (s)': duration.toFixed(2),
+                        'Score de performance': score,
+                    }
+                };
+            } catch (error) {
+                console.error("Erreur de test réseau:", error);
+                return { network: { 'Vitesse de DL (Mbps)': 'Échec', 'Score de performance': 0 } };
+            }
+        }
+
+        async function getGpuInfo() {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (!gl) {
+                return { gpu: { 'WebGL': 'Non supporté', 'Score de performance': 0 } };
+            }
+            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+            const renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : 'N/A';
+
+            const startTime = performance.now();
+            const vs = 'attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }';
+            const fs = 'void main() { gl_FragColor = vec4(1.0); }';
+            const program = gl.createProgram();
+            const vsShader = gl.createShader(gl.VERTEX_SHADER);
+            gl.shaderSource(vsShader, vs); gl.compileShader(vsShader);
+            const fsShader = gl.createShader(gl.FRAGMENT_SHADER);
+            gl.shaderSource(fsShader, fs); gl.compileShader(fsShader);
+            gl.attachShader(program, vsShader); gl.attachShader(program, fsShader);
+            gl.linkProgram(program); gl.useProgram(program);
+            const buf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+            const pos = gl.getAttribLocation(program, 'p');
+            gl.enableVertexAttribArray(pos);
+            gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+            for(let i=0; i<1000; i++) {
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1+i/500, -1, 1, -1, -1, 1]), gl.STATIC_DRAW);
+                gl.drawArrays(gl.TRIANGLES, 0, 3);
+            }
+            const duration = performance.now() - startTime;
+            const score = Math.max(0, Math.min(100, Math.round(2500 / duration)));
+
+            return {
+                gpu: {
+                    'Rendu GPU': renderer,
+                    'Temps de rendu (ms)': duration.toFixed(2),
+                    'Score de performance': score,
+                }
+            };
+        }
+
+        async function getDisplayInfo() {
+            return {
+                display: {
+                    'Résolution': `${screen.width} x ${screen.height}`,
+                    'Ratio Pixel': window.devicePixelRatio,
+                    'Profondeur couleur': `${screen.colorDepth}-bit`,
+                }
+            };
+        }
+
+        function displayReport(results) {
+            reportContent.innerHTML = ''; // Clear previous results
+            const icons = {
+                system: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25A2.25 2.25 0 015.25 3h9.75a2.25 2.25 0 012.25 2.25z" /></svg>`,
+                cpu: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21m-9-1.5h10.5a2.25 2.25 0 002.25-2.25V8.25a2.25 2.25 0 00-2.25-2.25H8.25a2.25 2.25 0 00-2.25 2.25v7.5a2.25 2.25 0 002.25 2.25z" /></svg>`,
+                memory: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 3.004H15.75a2.25 2.25 0 012.25 2.25v13.5a2.25 2.25 0 01-2.25 2.25H8.25a2.25 2.25 0 01-2.25-2.25V5.254a2.25 2.25 0 012.25-2.25z" /><path stroke-linecap="round" stroke-linejoin="round" d="M9 1.5V4.5M15 1.5V4.5M8.25 9H15.75M8.25 12H15.75M8.25 15H15.75" /></svg>`,
+                network: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12.75 19.5v-.75a7.5 7.5 0 00-7.5-7.5H4.5m0-6.75h.75c7.28 0 13.25 5.97 13.25 13.25v.75" /><path stroke-linecap="round" stroke-linejoin="round" d="M6 13.5h.75a6.75 6.75 0 016.75 6.75v.75" /></svg>`,
+                gpu: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-2.25-1.313M21 7.5v2.25m0-2.25l-2.25 1.313M3 7.5l2.25-1.313M3 7.5l2.25 1.313M3 7.5v2.25m9 3l2.25-1.313M12 12.75l-2.25-1.313M12 12.75V15m0 6.75v-1.5m0-2.25v-1.5m0 0l-2.25 1.313M12 9.75l2.25-1.313M12 9.75V7.5m0 0l2.25 1.313M12 7.5l-2.25 1.313m0 0l-2.25-1.313m2.25 1.313l2.25 1.313" /></svg>`,
+                display: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25A2.25 2.25 0 015.25 3h9.75a2.25 2.25 0 012.25 2.25z" /></svg>`
+            };
+            const titles = { system: "Système", cpu: "Processeur (CPU)", memory: "Mémoire", network: "Réseau", gpu: "Graphique (GPU)", display: "Affichage" };
+
+            for (const key of ['cpu', 'gpu', 'network', 'system', 'memory', 'display']) {
+                if (!results[key]) continue;
+                const data = results[key];
+                const score = data['Score de performance'];
+                
+                const itemEl = document.createElement('div');
+                itemEl.className = 'report-item';
+                
+                let contentHTML = `
+                    <div class="report-item-header">
+                        <div class="icon">${icons[key]}</div>
+                        <h3>${titles[key]}</h3>
+                    </div>`;
+
+                if (typeof score !== 'undefined') {
+                    contentHTML += `
+                        <div class="gauge-container">
+                             <div class="gauge" style="--value: ${score};" data-score="${score}">
+                                <div class="gauge-value">${score}<small>/100</small></div>
+                            </div>
+                        </div>`;
+                }
+
+                contentHTML += '<ul>';
+                for (const [label, value] of Object.entries(data)) {
+                    if (label !== 'Score de performance') {
+                       contentHTML += `<li><span class="label">${label}</span><span class="value">${value}</span></li>`;
+                    }
+                }
+                contentHTML += '</ul>';
+
+                itemEl.innerHTML = contentHTML;
+                reportContent.appendChild(itemEl);
+            }
+             // Animate gauges
+            setTimeout(() => {
+              document.querySelectorAll('.gauge').forEach(g => {
+                g.style.setProperty('--value', g.dataset.score);
+              });
+            }, 100);
+        }
+
+        async function generatePdf() {
+            const btn = document.getElementById('export-pdf-btn');
+            const reportWrapper = document.getElementById('report-content-wrapper');
+            if (!reportWrapper) return;
+            
+            btn.disabled = true;
+            btn.textContent = 'Génération...';
+
+            // Store original styles
+            const gauges = reportWrapper.querySelectorAll('.gauge');
+            const originalStyles = new Map();
+            gauges.forEach((gauge, index) => {
+                originalStyles.set(gauge, {
+                    transition: gauge.style.transition,
+                    backgroundImage: gauge.style.backgroundImage
+                });
+            });
+
+            try {
+                // Scroll to top to ensure html2canvas captures the whole element
+                mainContentEl.scrollTop = 0;
+
+                // Apply static styles for html2canvas
+                gauges.forEach(gauge => {
+                    const score = gauge.dataset.score;
+                    const fgColor = getComputedStyle(gauge).getPropertyValue('--gauge-fg').trim();
+                    gauge.style.transition = 'none';
+                    gauge.style.backgroundImage = `conic-gradient(${fgColor} ${score}%, var(--gauge-bg) 0)`;
+                });
+                
+                // Allow browser to repaint after scrolling and style changes
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                const canvas = await html2canvas(reportWrapper, {
+                    scale: 2,
+                    useCORS: true,
+                    backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--color-bg').trim(),
+                });
+
+                const imgData = canvas.toDataURL('image/png');
+                const canvasWidth = canvas.width;
+                const canvasHeight = canvas.height;
+                
+                // Convert pixels to a stable unit like millimeters for the PDF
+                // A4 width is 210mm, using 190mm for margins
+                const pdfWidth = 190; 
+                const pdfHeight = (canvasHeight * pdfWidth) / canvasWidth;
+
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: [pdfWidth, pdfHeight]
+                });
+                
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                pdf.save(`rapport-performance-${new Date().toISOString().slice(0,10)}.pdf`);
+
+            } catch (error) {
+                console.error("Erreur lors de la génération du PDF:", error);
+                alert("Une erreur est survenue lors de la création du PDF. Veuillez réessayer.");
+            } finally {
+                // Restore original styles
+                gauges.forEach(gauge => {
+                    const style = originalStyles.get(gauge);
+                    if (style) {
+                       gauge.style.transition = style.transition;
+                       gauge.style.backgroundImage = style.backgroundImage;
+                    }
+                });
+                btn.disabled = false;
+                btn.textContent = 'Exporter en PDF';
+            }
+        }
+    });
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

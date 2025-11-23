@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche" >
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Répartiteur de frais de coloc'</title>
+  <meta name="description" content="Un outil pour répartir les dépenses en colocation avec des règles de partage personnalisées par poste de dépense. Calcule automatiquement qui doit rembourser qui.">
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px; /* par défaut, peut être changé via body[data-size] */
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:flex-start; justify-content:center;
+      padding:48px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative; width: 100%; max-width: var(--tool-max-w);}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%;
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+    .form-group{display:flex; flex-direction:column; gap:8px}
+    .form-label{font-weight:500; color:var(--color-text-primary)}
+    .form-input{
+      width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      font-size:1rem; color:var(--color-text-primary); background:var(--color-bg);
+      transition:border-color .2s, box-shadow .2s;
+    }
+    .form-input:focus{outline:none; border-color:var(--color-violet); box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+    .actions{display:flex; justify-content:flex-end; gap:12px}
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:500; padding:10px 16px; border-radius:var(--radius-md); border:none; cursor:pointer;
+      transition:background-color .2s, box-shadow .2s, border-color .2s; font-size:14px;
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn-primary{background:var(--color-violet); color:#fff}
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark)}
+    .btn-primary:disabled{background:#A78BFA; cursor:not-allowed}
+    .btn-secondary {
+        background: transparent;
+        border: 1px solid var(--color-border);
+        color: var(--color-text-secondary);
+    }
+    .btn-secondary:hover {
+        background: var(--color-bg-alt);
+        color: var(--color-text-primary);
+    }
+    .status-text{font-size:14px; color:var(--color-text-secondary); text-align:center; min-height:21px}
+    
+    /* Styles spécifiques */
+    .dashboard{
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 24px;
+        width: 100%;
+    }
+    .card-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--color-border);
+    }
+    .input-group { display: flex; gap: 8px; }
+    .input-group input { flex-grow: 1; }
+    .item-list { display: flex; flex-direction: column; gap: 8px; }
+    .list-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        background: var(--color-bg-alt);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--color-border);
+    }
+    .list-item button {
+        background: transparent;
+        border: none;
+        color: var(--color-text-secondary);
+        cursor: pointer;
+        font-size: 1.2rem;
+        line-height: 1;
+    }
+    .expense-config-item {
+        padding: 16px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .expense-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .expense-header h4 { font-weight: 600; }
+    .split-total { font-size: 0.9rem; font-weight: 500; }
+    .split-total.invalid { color: #EF4444; }
+    .split-input-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .split-input-group label {
+        flex-basis: 100px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .bill-item {
+        display: grid;
+        grid-template-columns: 1fr 100px 120px;
+        gap: 12px;
+        align-items: center;
+    }
+    .form-select {
+      width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      font-size:1rem; color:var(--color-text-primary); background:var(--color-bg);
+    }
+    #results-card {
+        background-color: var(--color-bg-alt);
+        padding-top: 28px;
+    }
+    #results-list li {
+        font-size: 1.1rem;
+        padding: 8px 0;
+    }
+    #results-list strong {
+        color: var(--color-violet-dark);
+    }
+    .hidden { display: none; }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="wide">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Répartiteur de Frais</h1>
+      <div class="generator-card" style="padding: 0; background: transparent; border: none; box-shadow: none;">
+        <div class="dashboard">
+            <!-- Panneau de Configuration -->
+            <div id="config-panel" class="generator-card" style="padding-top: 28px;">
+                <h3 class="card-title">1. Configuration</h3>
+                
+                <div class="form-group">
+                    <label for="roommate-name" class="form-label">Colocataires</label>
+                    <div class="input-group">
+                        <input type="text" id="roommate-name" class="form-input" placeholder="Nom du colocataire">
+                        <button id="add-roommate-btn" class="btn btn-primary" style="flex-shrink: 0;">Ajouter</button>
+                    </div>
+                    <div id="roommate-list" class="item-list"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="expense-name" class="form-label">Postes de dépenses</label>
+                    <div class="input-group">
+                        <input type="text" id="expense-name" class="form-input" placeholder="Ex: Loyer, Netflix...">
+                        <button id="add-expense-btn" class="btn btn-primary" style="flex-shrink: 0;">Ajouter</button>
+                    </div>
+                    <div id="expense-config-list" class="item-list"></div>
+                </div>
+                <div class="actions" style="margin-top: auto; padding-top: 16px; border-top: 1px solid var(--color-border);">
+                    <button id="reset-btn" class="btn btn-secondary">Réinitialiser la configuration</button>
+                </div>
+            </div>
+
+            <!-- Panneau de Calcul -->
+            <div id="calculator-panel" class="generator-card" style="padding-top: 28px;">
+                <h3 class="card-title">2. Factures du mois</h3>
+                <form id="bills-form">
+                    <div id="bill-entry-list" class="item-list">
+                        <p class="status-text">Ajoutez des postes de dépenses pour commencer.</p>
+                    </div>
+                    <div class="actions" style="margin-top: 24px;">
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Répartir les frais</button>
+                    </div>
+                </form>
+
+                <div id="results-card" class="hidden">
+                    <h3 class="card-title">3. Qui doit rembourser qui ?</h3>
+                    <ul id="results-list"></ul>
+                </div>
+            </div>
+        </div>
+        <p id="status-text" class="status-text" style="margin-top: 16px;"></p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Background hex grid
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function drawBg(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+        const size = 24, hexW = 2*size, hexH = Math.sqrt(3)*size, stepX = hexW*3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)'; ctx.lineWidth = 1;
+        for(let r=0; r*hexH < rect.height+hexH; r++){
+          for(let col=0; col*stepX < rect.width+hexW; col++){
+            const x = col*stepX, y = r*hexH + (col%2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){ const a=2*Math.PI/6*i, px=x+size*Math.cos(a), py=y+size*Math.sin(a); if(i===0)ctx.moveTo(px,py); else ctx.lineTo(px,py); }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', drawBg, {passive:true});
+      drawBg();
+    })();
+
+    // --- App Logic ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const STORAGE_KEY = 'splitApp_state';
+
+        // --- State Management ---
+        function loadState() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    return JSON.parse(saved);
+                } catch (e) {
+                    console.error("Failed to parse saved state", e);
+                    localStorage.removeItem(STORAGE_KEY);
+                }
+            }
+            return { roommates: [], expenses: {} };
+        }
+
+        function saveState() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
+
+        let state = loadState();
+
+        // --- DOM Elements ---
+        const roommateNameInput = document.getElementById('roommate-name');
+        const addRoommateBtn = document.getElementById('add-roommate-btn');
+        const roommateList = document.getElementById('roommate-list');
+
+        const expenseNameInput = document.getElementById('expense-name');
+        const addExpenseBtn = document.getElementById('add-expense-btn');
+        const expenseConfigList = document.getElementById('expense-config-list');
+
+        const billEntryList = document.getElementById('bill-entry-list');
+        const billsForm = document.getElementById('bills-form');
+        const resultsCard = document.getElementById('results-card');
+        const resultsList = document.getElementById('results-list');
+        const statusText = document.getElementById('status-text');
+        const resetBtn = document.getElementById('reset-btn');
+
+        // --- Event Listeners ---
+        addRoommateBtn.addEventListener('click', addRoommate);
+        roommateNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addRoommate(); }});
+
+        addExpenseBtn.addEventListener('click', addExpense);
+        expenseNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addExpense(); }});
+        
+        resetBtn.addEventListener('click', () => {
+            if (confirm('Êtes-vous sûr de vouloir effacer toute la configuration ? Cette action est irréversible.')) {
+                localStorage.removeItem(STORAGE_KEY);
+                location.reload();
+            }
+        });
+
+        roommateList.addEventListener('click', (e) => {
+            if (e.target.matches('.remove-btn')) {
+                removeRoommate(e.target.dataset.name);
+            }
+        });
+        expenseConfigList.addEventListener('click', (e) => {
+            if (e.target.matches('.remove-btn')) {
+                removeExpense(e.target.dataset.name);
+            }
+        });
+        expenseConfigList.addEventListener('input', (e) => {
+            if (e.target.matches('.split-percent-input')) {
+                updateExpenseSplit(e.target.dataset.expense, e.target.dataset.roommate, e.target.value);
+            }
+        });
+
+        billsForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            calculate();
+        });
+
+        // --- State Actions & Rendering ---
+        function addRoommate() {
+            const name = roommateNameInput.value.trim();
+            if (name && !state.roommates.includes(name)) {
+                state.roommates.push(name);
+                roommateNameInput.value = '';
+                Object.values(state.expenses).forEach(expense => {
+                    expense.split[name] = 0;
+                });
+                saveState();
+                render();
+            }
+        }
+
+        function removeRoommate(name) {
+            state.roommates = state.roommates.filter(r => r !== name);
+            Object.values(state.expenses).forEach(expense => {
+                delete expense.split[name];
+            });
+            saveState();
+            render();
+        }
+
+        function addExpense() {
+            const name = expenseNameInput.value.trim();
+            if (name && !state.expenses[name]) {
+                state.expenses[name] = {
+                    split: state.roommates.reduce((acc, r) => ({ ...acc, [r]: 0 }), {}),
+                };
+                expenseNameInput.value = '';
+                saveState();
+                render();
+            }
+        }
+        
+        function removeExpense(name) {
+            delete state.expenses[name];
+            saveState();
+            render();
+        }
+
+        function updateExpenseSplit(expenseName, roommateName, value) {
+            const percentage = parseFloat(value) || 0;
+            state.expenses[expenseName].split[roommateName] = percentage;
+            
+            const total = Object.values(state.expenses[expenseName].split).reduce((sum, val) => sum + val, 0);
+            const totalSpan = expenseConfigList.querySelector(`[data-expense-total="${expenseName}"]`);
+            if (totalSpan) {
+                totalSpan.textContent = `${total}%`;
+                totalSpan.classList.toggle('invalid', total !== 100);
+            }
+            saveState();
+        }
+
+        function render() {
+            renderRoommateList();
+            renderExpenseConfigList();
+            renderBillEntryList();
+            renderPayerSelectOptions();
+        }
+
+        function renderRoommateList() {
+            roommateList.innerHTML = state.roommates.map(name => `
+                <div class="list-item">
+                    <span>${name}</span>
+                    <button class="remove-btn" data-name="${name}" aria-label="Supprimer ${name}">&times;</button>
+                </div>
+            `).join('');
+        }
+
+        function renderExpenseConfigList() {
+            expenseConfigList.innerHTML = Object.entries(state.expenses).map(([name, expense]) => {
+                const total = Object.values(expense.split).reduce((sum, val) => sum + val, 0);
+                return `
+                    <div class="expense-config-item">
+                        <div class="expense-header">
+                            <h4>${name}</h4>
+                            <span class="split-total ${total !== 100 ? 'invalid' : ''}" data-expense-total="${name}">${total}%</span>
+                            <button class="remove-btn" data-name="${name}" aria-label="Supprimer ${name}">&times;</button>
+                        </div>
+                        ${state.roommates.map(rName => `
+                            <div class="split-input-group">
+                                <label for="split-${name}-${rName}">${rName}</label>
+                                <input type="number" min="0" max="100" class="form-input split-percent-input"
+                                       id="split-${name}-${rName}" data-expense="${name}" data-roommate="${rName}"
+                                       value="${expense.split[rName] || 0}">
+                                <span>%</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function renderBillEntryList() {
+            if (Object.keys(state.expenses).length === 0) {
+                billEntryList.innerHTML = '<p class="status-text">Ajoutez des postes de dépenses pour commencer.</p>';
+                return;
+            }
+            billEntryList.innerHTML = Object.keys(state.expenses).map(name => `
+                <div class="bill-item">
+                    <label for="amount-${name}" class="form-label">${name}</label>
+                    <input type="number" step="0.01" class="form-input bill-amount" id="amount-${name}" placeholder="0.00 €" data-expense="${name}">
+                    <select class="form-select bill-payer" data-expense="${name}"></select>
+                </div>
+            `).join('');
+            renderPayerSelectOptions();
+        }
+
+        function renderPayerSelectOptions() {
+            const optionsHTML = state.roommates.map(name => `<option value="${name}">${name}</option>`).join('');
+            document.querySelectorAll('.bill-payer').forEach(select => {
+                select.innerHTML = optionsHTML;
+            });
+        }
+        
+        function calculate() {
+            statusText.textContent = '';
+            
+            // Validation
+            const invalidExpense = Object.entries(state.expenses).find(([name, exp]) => {
+                const total = Object.values(exp.split).reduce((sum, val) => sum + val, 0);
+                return total !== 100;
+            });
+            if (invalidExpense) {
+                statusText.textContent = `La répartition pour "${invalidExpense[0]}" n'est pas égale à 100%.`;
+                return;
+            }
+            if(state.roommates.length === 0) {
+                statusText.textContent = `Veuillez ajouter au moins un colocataire.`;
+                return;
+            }
+
+            const balances = state.roommates.reduce((acc, r) => ({ ...acc, [r]: 0 }), {});
+
+            document.querySelectorAll('.bill-item').forEach(item => {
+                const expenseName = item.querySelector('.bill-amount').dataset.expense;
+                const amount = parseFloat(item.querySelector('.bill-amount').value) || 0;
+                const payer = item.querySelector('.bill-payer').value;
+                
+                if (amount > 0 && payer) {
+                    balances[payer] += amount;
+                    const split = state.expenses[expenseName].split;
+                    state.roommates.forEach(rName => {
+                        const share = amount * ((split[rName] || 0) / 100);
+                        balances[rName] -= share;
+                    });
+                }
+            });
+
+            const transactions = settleDebts(balances);
+            displayResults(transactions);
+        }
+
+        function settleDebts(balances) {
+            const debtors = Object.entries(balances).filter(([, bal]) => bal < 0).map(([name, bal]) => ({ name, amount: -bal }));
+            const creditors = Object.entries(balances).filter(([, bal]) => bal > 0).map(([name, bal]) => ({ name, amount: bal }));
+            debtors.sort((a,b) => b.amount - a.amount);
+            creditors.sort((a,b) => b.amount - a.amount);
+
+            const transactions = [];
+            let i = 0, j = 0;
+            while (i < debtors.length && j < creditors.length) {
+                const debtor = debtors[i];
+                const creditor = creditors[j];
+                const amount = Math.min(debtor.amount, creditor.amount);
+
+                if(amount > 0.005) { // floating point precision
+                    transactions.push({ from: debtor.name, to: creditor.name, amount: amount });
+                    debtor.amount -= amount;
+                    creditor.amount -= amount;
+                }
+
+                if (debtor.amount < 0.005) i++;
+                if (creditor.amount < 0.005) j++;
+            }
+            return transactions;
+        }
+
+        function displayResults(transactions) {
+            resultsCard.classList.remove('hidden');
+            if (transactions.length === 0) {
+                resultsList.innerHTML = '<li>Tout est équilibré ! Personne ne doit rien à personne.</li>';
+                return;
+            }
+            resultsList.innerHTML = transactions.map(t =>
+                `<li>${t.from} doit rembourser <strong>${t.to}</strong> de <strong>${t.amount.toFixed(2)} €</strong></li>`
+            ).join('');
+        }
+        
+        // Initial render
+        render();
+    });
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

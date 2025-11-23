@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche" >
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculateur d'IMC</title>
+  <meta name="description" content="Un calculateur d'Indice de Masse Corporelle (IMC) stylé avec une jauge visuelle pour interpréter facilement votre résultat.">
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px; /* par défaut, peut être changé via body[data-size] */
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:flex-start; justify-content:center;
+      padding:48px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+    .form-group{display:flex; flex-direction:column; gap:8px}
+    .form-label{font-weight:500; color:var(--color-text-primary)}
+    .form-input{
+      width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      font-size:1rem; color:var(--color-text-primary); background:var(--color-bg);
+      transition:border-color .2s, box-shadow .2s;
+    }
+    .form-input:focus{outline:none; border-color:var(--color-violet); box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+    .actions{display:flex; justify-content:flex-end; gap:12px}
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:500; padding:10px 16px; border-radius:var(--radius-md); border:none; cursor:pointer;
+      transition:background-color .2s, box-shadow .2s; font-size:14px;
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn-primary{background:var(--color-violet); color:#fff}
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark)}
+    .btn-primary:disabled{background:#A78BFA; cursor:not-allowed}
+    
+    /* Styles spécifiques au calculateur d'IMC */
+    .unit-switcher {
+      display: flex;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+    .unit-switcher button {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      background-color: transparent;
+      color: var(--color-text-secondary);
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s, color 0.2s;
+    }
+    .unit-switcher button.active {
+      background-color: var(--color-violet);
+      color: #fff;
+    }
+    .input-row { display: flex; gap: 12px; }
+    .input-row > .form-group { flex: 1; }
+    .hidden { display: none; }
+    .results-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding-top: 20px;
+    }
+    .gauge {
+      width: 100%;
+      max-width: 280px;
+      position: relative;
+    }
+    .gauge svg { width: 100%; height: auto; }
+    .gauge-needle {
+      transition: transform 0.8s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+    }
+    .result-text { text-align: center; }
+    #imc-value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+    #imc-category {
+      font-size: 1.25rem;
+      font-weight: 500;
+      margin-top: 4px;
+    }
+    #imc-info {
+      font-size: 0.875rem;
+      color: var(--color-text-secondary);
+      margin-top: 8px;
+    }
+    .status-text {
+      font-size: 14px;
+      color: #EF4444; /* red-500 */
+      text-align: center;
+      min-height: 21px;
+    }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="default">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Calculateur d'IMC</h1>
+
+      <div class="generator-card" role="region" aria-label="Calculateur d'Indice de Masse Corporelle">
+        <form id="imc-form">
+          <div class="unit-switcher" aria-label="Sélecteur d'unités">
+            <button type="button" id="unit-metric" class="active" aria-pressed="true">Métrique (cm, kg)</button>
+            <button type="button" id="unit-imperial" aria-pressed="false">Impérial (ft, lbs)</button>
+          </div>
+
+          <div id="metric-inputs">
+            <div class="form-group">
+              <label for="height-cm" class="form-label">Taille (cm)</label>
+              <input type="number" id="height-cm" class="form-input" placeholder="Ex: 175" required>
+            </div>
+            <div class="form-group">
+              <label for="weight-kg" class="form-label">Poids (kg)</label>
+              <input type="number" id="weight-kg" class="form-input" placeholder="Ex: 70" required>
+            </div>
+          </div>
+
+          <div id="imperial-inputs" class="hidden">
+            <div class="form-group">
+                <label class="form-label">Taille</label>
+                <div class="input-row">
+                    <div class="form-group" style="gap:0">
+                        <input type="number" id="height-ft" class="form-input" placeholder="Pieds">
+                    </div>
+                    <div class="form-group" style="gap:0">
+                        <input type="number" id="height-in" class="form-input" placeholder="Pouces">
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+              <label for="weight-lbs" class="form-label">Poids (lbs)</label>
+              <input type="number" id="weight-lbs" class="form-input" placeholder="Ex: 155">
+            </div>
+          </div>
+          
+          <div class="actions" style="justify-content: center;">
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Calculer l'IMC</button>
+          </div>
+        </form>
+        
+        <div id="results-panel" class="results-panel hidden">
+            <div class="gauge">
+                <svg viewBox="0 0 100 57" >
+                    <path d="M 5 50 A 45 45 0 0 1 95 50" fill="none" stroke="#E9EAF0" stroke-width="8" stroke-linecap="round" />
+                    <path d="M 5 50 A 45 45 0 0 1 29.8 11.5" fill="none" stroke="#3B82F6" stroke-width="8" stroke-linecap="round" /> <!-- Maigreur -->
+                    <path d="M 29.8 11.5 A 45 45 0 0 1 61.3 7.8" fill="none" stroke="#22C55E" stroke-width="8" /> <!-- Normal -->
+                    <path d="M 61.3 7.8 A 45 45 0 0 1 85.1 20.6" fill="none" stroke="#F97316" stroke-width="8" /> <!-- Surpoids -->
+                    <path d="M 85.1 20.6 A 45 45 0 0 1 95 50" fill="none" stroke="#EF4444" stroke-width="8" stroke-linecap="round" /> <!-- Obésité -->
+                    <line id="gauge-needle" class="gauge-needle" x1="50" y1="50" x2="50" y2="10" stroke="var(--color-text-primary)" stroke-width="2" stroke-linecap="round" transform-origin="50 50" />
+                    <circle cx="50" cy="50" r="4" fill="var(--color-text-primary)" />
+                    <text x="5" y="57" font-size="6" fill="var(--color-text-secondary)">15</text>
+                    <text x="95" y="57" font-size="6" fill="var(--color-text-secondary)" text-anchor="end">40+</text>
+                </svg>
+            </div>
+            <div class="result-text">
+                <div id="imc-value">--.-</div>
+                <div id="imc-category">---</div>
+                <p id="imc-info">Un IMC sain se situe entre 18.5 et 24.9.</p>
+            </div>
+        </div>
+        <p id="status-text" class="status-text"></p>
+
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Background hex grid — NE PAS MODIFIER
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function drawBg(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+
+        const size = 24;
+        const hexW = 2 * size;
+        const hexH = Math.sqrt(3) * size;
+        const stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)';
+        ctx.lineWidth = 1;
+
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX;
+            const y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i;
+              const px = x + size * Math.cos(a);
+              const py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', drawBg, {passive:true});
+      drawBg();
+    })();
+
+    // --- Logic for IMC Calculator ---
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('imc-form');
+      const unitMetricBtn = document.getElementById('unit-metric');
+      const unitImperialBtn = document.getElementById('unit-imperial');
+      const metricInputs = document.getElementById('metric-inputs');
+      const imperialInputs = document.getElementById('imperial-inputs');
+      const resultsPanel = document.getElementById('results-panel');
+      const statusText = document.getElementById('status-text');
+
+      // Results elements
+      const gaugeNeedle = document.getElementById('gauge-needle');
+      const imcValueEl = document.getElementById('imc-value');
+      const imcCategoryEl = document.getElementById('imc-category');
+
+      let currentUnit = 'metric';
+
+      function switchUnit(unit) {
+        currentUnit = unit;
+        statusText.textContent = '';
+        if (unit === 'metric') {
+          unitMetricBtn.classList.add('active');
+          unitMetricBtn.setAttribute('aria-pressed', 'true');
+          unitImperialBtn.classList.remove('active');
+          unitImperialBtn.setAttribute('aria-pressed', 'false');
+          metricInputs.classList.remove('hidden');
+          imperialInputs.classList.add('hidden');
+        } else {
+          unitMetricBtn.classList.remove('active');
+          unitMetricBtn.setAttribute('aria-pressed', 'false');
+          unitImperialBtn.classList.add('active');
+          unitImperialBtn.setAttribute('aria-pressed', 'true');
+          metricInputs.classList.add('hidden');
+          imperialInputs.classList.remove('hidden');
+        }
+      }
+
+      unitMetricBtn.addEventListener('click', () => switchUnit('metric'));
+      unitImperialBtn.addEventListener('click', () => switchUnit('imperial'));
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        calculateIMC();
+      });
+
+      function calculateIMC() {
+        let heightCm, weightKg;
+        statusText.textContent = '';
+
+        if (currentUnit === 'metric') {
+          heightCm = parseFloat(document.getElementById('height-cm').value);
+          weightKg = parseFloat(document.getElementById('weight-kg').value);
+        } else {
+          const ft = parseFloat(document.getElementById('height-ft').value) || 0;
+          const inches = parseFloat(document.getElementById('height-in').value) || 0;
+          const lbs = parseFloat(document.getElementById('weight-lbs').value);
+          if ((ft + inches) > 0 && lbs > 0) {
+            heightCm = (ft * 12 + inches) * 2.54;
+            weightKg = lbs * 0.453592;
+          }
+        }
+        
+        if (!heightCm || !weightKg || heightCm <= 0 || weightKg <= 0) {
+            statusText.textContent = 'Veuillez entrer une taille et un poids valides.';
+            resultsPanel.classList.add('hidden');
+            return;
+        }
+
+        const heightM = heightCm / 100;
+        const imc = weightKg / (heightM * heightM);
+
+        displayResult(imc);
+      }
+      
+      function displayResult(imc) {
+        let category, color;
+        if (imc < 18.5) {
+            category = "Poids insuffisant";
+            color = "#3B82F6"; // blue-500
+        } else if (imc < 25) {
+            category = "Poids normal";
+            color = "#22C55E"; // green-500
+        } else if (imc < 30) {
+            category = "Surpoids";
+            color = "#F97316"; // orange-500
+        } else {
+            category = "Obésité";
+            color = "#EF4444"; // red-500
+        }
+
+        // Map IMC to gauge angle (-90 to 90 degrees)
+        const minImc = 15;
+        const maxImc = 40;
+        const clampedImc = Math.max(minImc, Math.min(maxImc, imc));
+        const percentage = (clampedImc - minImc) / (maxImc - minImc);
+        const angle = percentage * 180 - 90;
+
+        gaugeNeedle.style.transform = `rotate(${angle}deg)`;
+        imcValueEl.textContent = imc.toFixed(1);
+        imcCategoryEl.textContent = category;
+        imcCategoryEl.style.color = color;
+        
+        resultsPanel.classList.remove('hidden');
+      }
+    });
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Créateur de Fiches de Révision — La Ruche</title>
+  <meta name="description" content="Créez des fiches de révision stylisées avec des thèmes, des icônes et une mise en page claire. Prévisualisez en direct et exportez en PDF.">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@400;500;600&display=swap');
+    :root {
+      --color-bg: #FFFFFF;
+      --color-bg-alt: #F7F8FA;
+      --color-border: #E9EAF0;
+      --color-text-primary: #141417;
+      --color-text-secondary: #6B7280;
+      --color-violet: #7C3AED;
+      --color-violet-dark: #6D28D9;
+      --radius-md: 12px;
+      --radius-lg: 14px;
+      --tool-max-w: 480px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; background-color: var(--color-bg); }
+    body {
+      height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--color-text-primary); line-height: 1.5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    body[data-size="default"] { --tool-max-w: 480px; }
+    body[data-size="wide"] { --tool-max-w: 960px; }
+    body[data-size="xl"] { --tool-max-w: 1200px; }
+
+    #bg-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; }
+
+    .app-header {
+      flex-shrink: 0; background: var(--color-bg-alt); border-bottom: 1px solid var(--color-border);
+      padding: 0 24px; display: flex; align-items: center; height: 70px;
+    }
+    .app-header a { display: inline-flex; align-items: center; }
+    .logo-img { height: 70px; width: auto; vertical-align: middle; }
+
+    .main-content {
+      flex-grow: 1; display: flex; align-items: center; justify-content: center;
+      padding: 48px 24px; overflow-y: auto;
+    }
+    .tool-wrapper { display: flex; flex-direction: column; align-items: center; position: relative; width:100%; max-width: var(--tool-max-w); }
+    .tool-title {
+      font-size: 1.75rem; font-weight: 600; padding: 12px 28px;
+      background: linear-gradient(45deg, var(--color-violet), var(--color-violet-dark));
+      color: #fff; border-radius: var(--radius-md); margin-bottom: -20px; position: relative; z-index: 5;
+      box-shadow: 0 4px 14px -4px rgba(124, 58, 237, .4);
+    }
+    .generator-card {
+      background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+      padding: 28px; padding-top: 40px; width: 100%; max-width: var(--tool-max-w);
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display: flex; flex-direction: column; gap: 24px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-label { font-weight: 500; color: var(--color-text-primary); font-size: 14px;}
+    .form-input, .form-textarea {
+      width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+      font-size: 1rem; color: var(--color-text-primary); background: var(--color-bg);
+      transition: border-color .2s, box-shadow .2s; font-family: inherit;
+    }
+    .form-input:focus, .form-textarea:focus { outline: none; border-color: var(--color-violet); box-shadow: 0 0 0 3px rgba(124, 58, 237, .2); }
+    .form-textarea { min-height: 120px; resize: vertical; }
+
+    .editor-layout { display: grid; grid-template-columns: 400px 1fr; gap: 28px; height: calc(100vh - 230px); }
+    .form-panel { overflow-y: auto; padding-right: 16px; display: flex; flex-direction: column; gap: 20px;}
+    .preview-panel { background-color: var(--color-bg-alt); border-radius: var(--radius-md); padding: 24px; overflow-y: auto; }
+    #preview-content {
+        background-color: #fff;
+        border: 1px solid var(--color-border);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        padding: 40px;
+        min-height: 100%;
+        transition: all 0.2s ease-in-out;
+    }
+
+    /* Fiche Preview Styles */
+    .fiche-header { border-bottom: 2px solid; padding-bottom: 16px; margin-bottom: 24px; }
+    .fiche-title { font-size: 2.25rem; font-weight: 700; line-height: 1.2; margin:0; }
+    .fiche-subject { font-size: 1.1rem; font-weight: 500; margin-top: 4px; }
+    .fiche-section { margin-bottom: 24px; }
+    .fiche-section h3 { font-size: 1.25rem; border-bottom: 1px solid; padding-bottom: 8px; margin-bottom: 12px; font-weight: 600; }
+    .fiche-section p { font-size: 1rem; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word;}
+    .fiche-section p:empty::before { content: '...'; color: #ccc; }
+
+    /* Font styles */
+    .font-inter { font-family: 'Inter', sans-serif; }
+    .font-lora { font-family: 'Lora', serif; }
+    .font-lora h1, .font-lora h2, .font-lora h3 { font-family: 'Lora', serif; }
+
+    /* Theme styles */
+    .theme-violet { --theme-color: #7C3AED; }
+    .theme-ocean { --theme-color: #0ea5e9; }
+    .theme-forest { --theme-color: #16a34a; }
+    .theme-graphite { --theme-color: #475569; }
+    .theme-sunrise { --theme-color: #f97316; }
+    
+    #preview-content {
+      --fiche-color-primary: var(--theme-color, var(--color-violet));
+      --fiche-color-secondary: var(--color-text-secondary);
+      --fiche-color-border: #e2e8f0;
+    }
+    .fiche-header { border-color: var(--fiche-color-primary); }
+    .fiche-title { color: var(--fiche-color-primary); }
+    .fiche-subject { color: var(--fiche-color-secondary); }
+    .fiche-section h3 { border-color: var(--fiche-color-border); color: var(--fiche-color-primary); }
+    
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      font-weight: 500; padding: 10px 16px; border-radius: var(--radius-md); border: none; cursor:pointer;
+      transition:all .2s; font-size: 14px;
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn-primary{background:var(--color-violet); color:#fff}
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark)}
+    .btn-primary:disabled{background:#A78BFA; cursor:not-allowed}
+    .btn-secondary { background-color: var(--color-bg-alt); color: var(--color-text-primary); border: 1px solid var(--color-border);}
+    .btn-secondary:hover { background-color: #F0F1F5;}
+    .btn-danger { background-color: #fee2e2; color: #b91c1c; font-size: 12px; padding: 4px 8px; }
+    
+    .dynamic-section { background: var(--color-bg-alt); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--color-border); }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+
+    /* New UI Controls */
+    .control-group { display: flex; flex-direction: column; gap: 12px; }
+    .selector-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+    .theme-swatch {
+      width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--color-border);
+      cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; background-color: var(--swatch-color);
+    }
+    .theme-swatch[aria-pressed="true"] { border-color: var(--color-violet); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.4); transform: scale(1.1); }
+    .font-btn {
+      flex-grow: 1; padding: 8px 12px; background: var(--color-bg-alt); border: 1px solid var(--color-border);
+      border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s;
+    }
+    .font-btn[aria-pressed="true"] { background: var(--color-violet); color: #fff; border-color: var(--color-violet-dark); }
+
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="xl">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Créateur de Fiches de Révision</h1>
+      <div class="generator-card" role="region" aria-label="Éditeur de fiche de révision">
+        <div class="editor-layout">
+            <div class="form-panel" id="form-panel">
+                <div class="form-group">
+                    <label for="title-input" class="form-label">Titre de la fiche</label>
+                    <input type="text" id="title-input" class="form-input" value="Ma Super Fiche">
+                </div>
+                <div class="form-group">
+                    <label for="subject-input" class="form-label">Matière / Sujet</label>
+                    <input type="text" id="subject-input" class="form-input" value="Histoire des Civilisations">
+                </div>
+
+                <div class="control-group">
+                    <p class="form-label">Thème</p>
+                    <div id="theme-selector" class="selector-grid">
+                        <button class="theme-swatch" data-theme="violet" style="--swatch-color: #7C3AED;" aria-label="Thème Violet" aria-pressed="true"></button>
+                        <button class="theme-swatch" data-theme="ocean" style="--swatch-color: #0ea5e9;" aria-label="Thème Océan" aria-pressed="false"></button>
+                        <button class="theme-swatch" data-theme="forest" style="--swatch-color: #16a34a;" aria-label="Thème Forêt" aria-pressed="false"></button>
+                        <button class="theme-swatch" data-theme="graphite" style="--swatch-color: #475569;" aria-label="Thème Graphite" aria-pressed="false"></button>
+                        <button class="theme-swatch" data-theme="sunrise" style="--swatch-color: #f97316;" aria-label="Thème Lever de soleil" aria-pressed="false"></button>
+                    </div>
+                </div>
+                 <div class="control-group">
+                    <p class="form-label">Police</p>
+                    <div id="font-selector" class="selector-grid">
+                        <button class="font-btn font-inter" data-font="inter" aria-pressed="true">Moderne</button>
+                        <button class="font-btn font-lora" data-font="lora" aria-pressed="false">Classique</button>
+                    </div>
+                </div>
+
+                <hr style="border:none; border-top:1px solid var(--color-border);">
+                <div id="sections-container"></div>
+                <button id="add-section-btn" class="btn btn-secondary">Ajouter une section</button>
+                <div style="margin-top:auto; padding-top: 16px;">
+                    <button id="generate-pdf-btn" class="btn btn-primary" style="width:100%;">Générer le PDF</button>
+                    <p id="pdf-status" style="text-align:center; font-size:12px; color:var(--color-text-secondary); min-height:18px;"></p>
+                </div>
+            </div>
+            <div class="preview-panel">
+                <div id="preview-content"></div>
+            </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  
+  <script type="module">
+    const { jsPDF } = window.jspdf;
+    
+    // State
+    let state = {
+        title: 'Ma Super Fiche',
+        subject: 'Histoire des Civilisations',
+        theme: 'violet',
+        font: 'inter',
+        sections: [
+            { title: 'Concept Clé 1', content: 'Ceci est la description du premier concept clé. Vous pouvez y mettre des définitions, des dates importantes ou des formules.' },
+            { title: 'Exemple Important', content: 'Illustrez vos concepts avec des exemples concrets pour mieux les retenir.' }
+        ]
+    };
+    
+    // DOM Elements
+    const DOMElements = {
+        titleInput: document.getElementById('title-input'),
+        subjectInput: document.getElementById('subject-input'),
+        themeSelector: document.getElementById('theme-selector'),
+        fontSelector: document.getElementById('font-selector'),
+        sectionsContainer: document.getElementById('sections-container'),
+        addSectionBtn: document.getElementById('add-section-btn'),
+        generatePdfBtn: document.getElementById('generate-pdf-btn'),
+        pdfStatus: document.getElementById('pdf-status'),
+        previewContent: document.getElementById('preview-content'),
+    };
+    
+    const renderPreview = () => {
+        const { title, subject, theme, font, sections } = state;
+        
+        const sectionsHTML = sections.map(section => `
+            <div class="fiche-section">
+                <h3>${section.title || 'Sans titre'}</h3>
+                <p>${section.content || ''}</p>
+            </div>
+        `).join('');
+
+        DOMElements.previewContent.className = `theme-${theme} font-${font}`;
+        DOMElements.previewContent.innerHTML = `
+            <div class="fiche-header">
+                <h1 class="fiche-title">${title || 'Sans titre'}</h1>
+                <h2 class="fiche-subject">${subject || 'Sans sujet'}</h2>
+            </div>
+            ${sectionsHTML}
+        `;
+    };
+    
+    const renderSections = () => {
+        DOMElements.sectionsContainer.innerHTML = state.sections.map((section, index) => `
+            <div class="dynamic-section" data-index="${index}">
+                <div class="section-header">
+                    <label class="form-label" style="font-size: 1rem;">Section ${index + 1}</label>
+                    <button class="btn-danger remove-section-btn" aria-label="Supprimer la section ${index + 1}">Supprimer</button>
+                </div>
+                <div class="form-group">
+                    <input type="text" class="form-input section-title-input" value="${section.title}" placeholder="Titre de la section">
+                </div>
+                <div class="form-group">
+                    <textarea class="form-textarea section-content-input" placeholder="Contenu de la section...">${section.content}</textarea>
+                </div>
+            </div>
+        `).join('<hr style="border:none; height:20px;">');
+    };
+    
+    const updateState = (newState) => {
+        state = { ...state, ...newState };
+        renderPreview();
+    };
+
+    const handleFormChange = () => {
+        const newTitle = DOMElements.titleInput.value;
+        const newSubject = DOMElements.subjectInput.value;
+        updateState({ title: newTitle, subject: newSubject });
+    };
+
+    const handleThemeChange = (e) => {
+        const target = e.target.closest('.theme-swatch');
+        if (!target) return;
+        
+        DOMElements.themeSelector.querySelectorAll('.theme-swatch').forEach(btn => btn.setAttribute('aria-pressed', 'false'));
+        target.setAttribute('aria-pressed', 'true');
+        
+        updateState({ theme: target.dataset.theme });
+    };
+    
+    const handleFontChange = (e) => {
+        const target = e.target.closest('.font-btn');
+        if (!target) return;
+
+        DOMElements.fontSelector.querySelectorAll('.font-btn').forEach(btn => btn.setAttribute('aria-pressed', 'false'));
+        target.setAttribute('aria-pressed', 'true');
+
+        updateState({ font: target.dataset.font });
+    };
+
+    const handleSectionsChange = (e) => {
+        const target = e.target;
+        if (target.matches('.section-title-input, .section-content-input')) {
+            const sectionElement = target.closest('.dynamic-section');
+            const index = parseInt(sectionElement.dataset.index, 10);
+            const newSections = [...state.sections];
+            
+            if (target.matches('.section-title-input')) {
+                newSections[index].title = target.value;
+            } else {
+                newSections[index].content = target.value;
+            }
+            updateState({ sections: newSections });
+        }
+    };
+    
+    const addSection = () => {
+        const newSections = [...state.sections, { title: `Nouvelle Section`, content: '' }];
+        updateState({ sections: newSections });
+        renderSections();
+    };
+
+    const removeSection = (e) => {
+        if (!e.target.matches('.remove-section-btn')) return;
+        const sectionElement = e.target.closest('.dynamic-section');
+        const index = parseInt(sectionElement.dataset.index, 10);
+        const newSections = state.sections.filter((_, i) => i !== index);
+        updateState({ sections: newSections });
+        renderSections();
+    };
+    
+    const generatePDF = async () => {
+        DOMElements.generatePdfBtn.disabled = true;
+        DOMElements.pdfStatus.textContent = 'Génération du PDF en cours...';
+
+        try {
+            const { title, subject, theme, font, sections } = state;
+            const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+
+            const page = {
+                width: pdf.internal.pageSize.getWidth(),
+                height: pdf.internal.pageSize.getHeight(),
+            };
+            const margin = { top: 60, right: 60, bottom: 60, left: 60 };
+            const contentWidth = page.width - margin.left - margin.right;
+            
+            const themes = {
+                violet: '#7C3AED',
+                ocean: '#0ea5e9',
+                forest: '#16a34a',
+                graphite: '#475569',
+                sunrise: '#f97316',
+            };
+            const themeColor = themes[theme] || '#141417';
+            const textColor = '#141417';
+            const secondaryTextColor = '#6B7280';
+
+            const fonts = {
+                inter: { normal: 'Helvetica', bold: 'Helvetica-Bold' },
+                lora: { normal: 'Times-Roman', bold: 'Times-Bold' },
+            };
+            const currentFont = fonts[font] || fonts['inter'];
+
+            let y = margin.top;
+
+            const checkPageBreak = (neededHeight) => {
+                if (y + neededHeight > page.height - margin.bottom) {
+                    pdf.addPage();
+                    y = margin.top;
+                }
+            };
+            
+            // --- Render Header ---
+            checkPageBreak(80); // Min height for header
+
+            pdf.setFont(currentFont.bold);
+            pdf.setFontSize(26);
+            pdf.setTextColor(themeColor);
+            pdf.text(title, margin.left, y, { maxWidth: contentWidth });
+            y += (pdf.getTextDimensions(title, { maxWidth: contentWidth }).h) + 10;
+
+
+            pdf.setFont(currentFont.normal);
+            pdf.setFontSize(14);
+            pdf.setTextColor(secondaryTextColor);
+            pdf.text(subject, margin.left, y, { maxWidth: contentWidth });
+            y += (pdf.getTextDimensions(subject, { maxWidth: contentWidth }).h) + 10;
+
+            pdf.setDrawColor(themeColor);
+            pdf.setLineWidth(2);
+            pdf.line(margin.left, y, page.width - margin.right, y);
+            y += 30;
+
+            // --- Render Sections ---
+            for (const section of sections) {
+                const sectionTitle = section.title || 'Sans titre';
+                const sectionContent = section.content || '';
+
+                pdf.setFont(currentFont.bold);
+                pdf.setFontSize(14);
+                const titleLines = pdf.splitTextToSize(sectionTitle, contentWidth);
+                const titleHeight = titleLines.length * 16; 
+
+                pdf.setFont(currentFont.normal);
+                pdf.setFontSize(11);
+                const contentLines = pdf.splitTextToSize(sectionContent, contentWidth);
+                const contentHeight = contentLines.length * 14; 
+                
+                const sectionHeight = titleHeight + contentHeight + 25; 
+                
+                checkPageBreak(sectionHeight);
+                
+                pdf.setFont(currentFont.bold);
+                pdf.setFontSize(14);
+                pdf.setTextColor(themeColor);
+                pdf.text(titleLines, margin.left, y);
+                y += titleHeight + 5;
+                
+                pdf.setDrawColor('#E9EAF0');
+                pdf.setLineWidth(0.5);
+                pdf.line(margin.left, y, page.width - margin.right, y);
+                y += 15;
+
+                if (sectionContent) {
+                    pdf.setFont(currentFont.normal);
+                    pdf.setFontSize(11);
+                    pdf.setTextColor(textColor);
+                    pdf.text(contentLines, margin.left, y);
+                    y += contentHeight;
+                }
+                
+                y += 30;
+            }
+
+            pdf.save(`${state.title.replace(/ /g, '_') || 'fiche'}.pdf`);
+            DOMElements.pdfStatus.textContent = 'PDF généré avec succès !';
+
+        } catch (error) {
+            console.error("Erreur lors de la génération du PDF:", error);
+            DOMElements.pdfStatus.textContent = 'Une erreur est survenue.';
+        } finally {
+            setTimeout(() => {
+                DOMElements.generatePdfBtn.disabled = false;
+                DOMElements.pdfStatus.textContent = '';
+            }, 3000);
+        }
+    };
+    
+
+    // Initial Setup
+    const init = () => {
+        DOMElements.titleInput.addEventListener('input', handleFormChange);
+        DOMElements.subjectInput.addEventListener('input', handleFormChange);
+        DOMElements.themeSelector.addEventListener('click', handleThemeChange);
+        DOMElements.fontSelector.addEventListener('click', handleFontChange);
+        DOMElements.addSectionBtn.addEventListener('click', addSection);
+        DOMElements.sectionsContainer.addEventListener('input', handleSectionsChange);
+        DOMElements.sectionsContainer.addEventListener('click', removeSection);
+        DOMElements.generatePdfBtn.addEventListener('click', generatePDF);
+        
+        renderSections();
+        renderPreview();
+    };
+    init();
+
+    // Background hex grid — NE PAS MODIFIER
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0,0,rect.width,rect.height);
+
+        const size = 24;
+        const hexW = 2 * size;
+        const hexH = Math.sqrt(3) * size;
+        const stepX = hexW * 3/4;
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)';
+        ctx.lineWidth = 1 / dpr; // Keep line width consistent
+
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX;
+            const y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i;
+              const px = x + size * Math.cos(a);
+              const py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

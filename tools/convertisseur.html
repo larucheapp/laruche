@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Convertisseur de Devises - La Ruche</title>
+  <meta name="description" content="Convertissez des devises en temps réel avec les derniers taux de change.">
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px; /* par défaut, peut être changé via body[data-size] */
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:center; justify-content:center;
+      padding:48px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+    
+    .status-text{font-size:14px; color:var(--color-text-secondary); text-align:center; min-height:21px}
+
+    /* ===== STYLES CONVERTISSEUR AMÉLIORÉS ===== */
+    .converter-wrapper {
+      background-color: var(--color-bg-alt);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 8px;
+    }
+
+    .currency-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px;
+    }
+    .currency-row .form-label {
+      font-size: 0.875rem;
+      color: var(--color-text-secondary);
+      margin-bottom: 4px;
+    }
+    .currency-row-content {
+      position: relative;
+    }
+    .amount-input {
+      border: none;
+      background: none;
+      font-size: 2rem;
+      font-weight: 600;
+      color: var(--color-text-primary);
+      text-align: right;
+      width: 100%;
+      padding: 4px;
+      border-radius: var(--radius-md);
+    }
+    .amount-input:focus {
+      outline: none;
+      box-shadow: inset 0 0 0 2px var(--color-border);
+    }
+
+    .swap-divider {
+      position: relative;
+      height: 1px;
+      background-color: var(--color-border);
+      margin: 0 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #swap-btn {
+      position: absolute;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 4px solid var(--color-bg-alt);
+      background-color: var(--color-violet);
+      color: #fff;
+      cursor: pointer;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s;
+    }
+    
+    #swap-btn:hover {
+      background-color: var(--color-violet-dark);
+      transform: rotate(180deg) scale(1.1);
+    }
+    
+    #swap-btn:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--color-bg), 0 0 0 5px var(--color-violet);
+    }
+
+    /* == Custom Select Dropdown with Flags == */
+    .custom-select-trigger {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 4px 8px;
+      margin-left: -8px;
+      border-radius: var(--radius-md);
+      transition: background-color 0.2s;
+      width: 100%;
+    }
+    .custom-select-trigger:hover {
+      background-color: rgba(0,0,0,0.05);
+    }
+    .custom-select-trigger:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
+    }
+    .custom-select-trigger .flag-icon {
+      width: 32px;
+      height: 24px;
+      object-fit: cover;
+      border-radius: 4px;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.1);
+    }
+    .custom-select-trigger .currency-code {
+      font-weight: 600;
+      font-size: 1.5rem;
+      color: var(--color-text-primary);
+    }
+    .custom-select-options {
+      position: absolute;
+      top: 110%;
+      left: 0;
+      width: 100%;
+      max-height: 250px;
+      overflow-y: auto;
+      background: var(--color-bg);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
+      z-index: 100;
+      padding: 8px;
+    }
+    .custom-select-options.hidden {
+      display: none;
+    }
+    .option {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      cursor: pointer;
+      border-radius: 8px;
+    }
+    .option:hover, .option.focused {
+      background-color: var(--color-bg-alt);
+    }
+    .option .flag-icon {
+      width: 24px;
+      height: 18px;
+      object-fit: cover;
+      border-radius: 3px;
+    }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="default">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Convertisseur</h1>
+      
+      <div class="generator-card" role="region" aria-label="Convertisseur de Devises">
+        
+        <div class="converter-wrapper">
+          <!-- Panneau du haut -->
+          <div class="currency-row">
+            <div>
+              <label class="form-label">Vous envoyez</label>
+              <div id="from-currency-wrapper" class="currency-row-content" data-value="USD">
+                <button class="custom-select-trigger" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="from-label from-currency-value">
+                  <!-- Contenu injecté par JS -->
+                </button>
+                <div class="custom-select-options hidden" role="listbox"></div>
+              </div>
+            </div>
+            <input type="number" id="from-amount" class="amount-input" value="100" step="1" min="0" aria-label="Montant d'origine">
+          </div>
+
+          <!-- Séparateur avec bouton Swap -->
+          <div class="swap-divider">
+            <button id="swap-btn" aria-label="Inverser les devises">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+            </button>
+          </div>
+
+          <!-- Panneau du bas -->
+          <div class="currency-row">
+            <div>
+              <label class="form-label">Le destinataire reçoit</label>
+              <div id="to-currency-wrapper" class="currency-row-content" data-value="EUR">
+                 <button class="custom-select-trigger" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="to-label to-currency-value">
+                  <!-- Contenu injecté par JS -->
+                </button>
+                <div class="custom-select-options hidden" role="listbox"></div>
+              </div>
+            </div>
+            <input type="number" id="to-amount" class="amount-input" value="0.00" step="1" min="0" aria-label="Montant de destination">
+          </div>
+        </div>
+        
+        <div id="rate-info" class="status-text">
+          Chargement des taux de change...
+        </div>
+      </div>
+      
+    </div>
+  </main>
+
+  <script>
+    // Background hex grid — NE PAS MODIFIER
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+        const size=24,hexW=2*size,hexH=Math.sqrt(3)*size,stepX=hexW*3/4;
+        ctx.strokeStyle='rgba(124,58,237,0.10)'; ctx.lineWidth=1;
+        for(let r=0;r*hexH<rect.height+hexH;r++) for(let col=0;col*stepX<rect.width+hexW;col++){
+          const x=col*stepX, y=r*hexH+(col%2?hexH/2:0);
+          ctx.beginPath();
+          for(let i=0;i<6;i++){ const a=2*Math.PI/6*i,px=x+size*Math.cos(a),py=y+size*Math.sin(a); if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py); }
+          ctx.closePath(); ctx.stroke();
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true}); draw();
+    })();
+  </script>
+  
+  <script>
+    const fromAmountInput = document.getElementById('from-amount');
+    const toAmountInput = document.getElementById('to-amount');
+    const fromCurrencyWrapper = document.getElementById('from-currency-wrapper');
+    const toCurrencyWrapper = document.getElementById('to-currency-wrapper');
+    const swapBtn = document.getElementById('swap-btn');
+    const rateInfo = document.getElementById('rate-info');
+    
+    const API_URL = 'https://open.er-api.com/v6/latest/USD';
+    let rates = {};
+    let isUpdating = false;
+
+    // Map pour lier les devises à un code de pays pour le drapeau
+    const currencyToCountryMap = {
+      USD: 'us', EUR: 'eu', JPY: 'jp', GBP: 'gb', AUD: 'au', CAD: 'ca', CHF: 'ch', CNY: 'cn', SEK: 'se', NZD: 'nz',
+      MXN: 'mx', SGD: 'sg', HKD: 'hk', NOK: 'no', KRW: 'kr', TRY: 'tr', RUB: 'ru', INR: 'in', BRL: 'br', ZAR: 'za',
+      AED: 'ae', AFN: 'af', ALL: 'al', AMD: 'am', ANG: 'sx', AOA: 'ao', ARS: 'ar', AWG: 'aw', AZN: 'az', BAM: 'ba',
+      BBD: 'bb', BDT: 'bd', BGN: 'bg', BHD: 'bh', BIF: 'bi', BMD: 'bm', BND: 'bn', BOB: 'bo', BSD: 'bs', BTN: 'bt',
+      BWP: 'bw', BYN: 'by', BZD: 'bz', CDF: 'cd', CLP: 'cl', COP: 'co', CRC: 'cr', CUP: 'cu', CVE: 'cv', CZK: 'cz',
+      DJF: 'dj', DKK: 'dk', DOP: 'do', DZD: 'dz', EGP: 'eg', ERN: 'er', ETB: 'et', FJD: 'fj', FKP: 'fk', FOK: 'fo',
+      GEL: 'ge', GGP: 'gg', GHS: 'gh', GIP: 'gi', GMD: 'gm', GNF: 'gn', GTQ: 'gt', GYD: 'gy', HNL: 'hn', HTG: 'ht',
+      HUF: 'hu', IDR: 'id', ILS: 'il', IMP: 'im', IQD: 'iq', IRR: 'ir', ISK: 'is', JEP: 'je', JMD: 'jm', JOD: 'jo',
+      KES: 'ke', KGS: 'kg', KHR: 'kh', KID: 'ki', KMF: 'km', KWD: 'kw', KYD: 'ky', KZT: 'kz', LAK: 'la', LBP: 'lb',
+      LKR: 'lk', LRD: 'lr', LSL: 'ls', LYD: 'ly', MAD: 'ma', MDL: 'md', MGA: 'mg', MKD: 'mk', MMK: 'mm', MNT: 'mn',
+      MOP: 'mo', MRU: 'mr', MUR: 'mu', MVR: 'mv', MWK: 'mw', MYR: 'my', MZN: 'mz', NAD: 'na', NGN: 'ng', NIO: 'ni',
+      NPR: 'np', OMR: 'om', PAB: 'pa', PEN: 'pe', PGK: 'pg', PHP: 'ph', PKR: 'pk', PLN: 'pl', PYG: 'py', QAR: 'qa',
+      RON: 'ro', RSD: 'rs', RWF: 'rw', SAR: 'sa', SBD: 'sb', SCR: 'sc', SDG: 'sd', SHP: 'sh', SLE: 'sl', SLL: 'sl',
+      SOS: 'so', SRD: 'sr', SSP: 'ss', STN: 'st', SYP: 'sy', SZL: 'sz', THB: 'th', TJS: 'tj', TMT: 'tm', TND: 'tn',
+      TOP: 'to', TTD: 'tt', TVD: 'tv', TWD: 'tw', TZS: 'tz', UAH: 'ua', UGX: 'ug', UYU: 'uy', UZS: 'uz', VES: 've',
+      VND: 'vn', VUV: 'vu', WST: 'ws', XAF: 'cm', XCD: 'ag', XDR: 'un', XOF: 'sn', XPF: 'pf', YER: 'ye', ZMW: 'zm', ZWL: 'zw',
+    };
+    
+    function getFlagUrl(currencyCode) {
+      const countryCode = currencyToCountryMap[currencyCode] || 'xx'; // 'xx' pour un drapeau générique si non trouvé
+      return `https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`;
+    }
+
+    async function fetchRates() {
+      try {
+        const response = await fetch(API_URL);
+        if (!response.ok) throw new Error('Erreur réseau');
+        const data = await response.json();
+        if (data.result === 'error') throw new Error(data['error-type']);
+        
+        rates = data.rates;
+        setupCustomSelect(fromCurrencyWrapper);
+        setupCustomSelect(toCurrencyWrapper);
+        convert('from');
+        
+      } catch (error) {
+        rateInfo.textContent = 'Impossible de charger les taux.';
+        console.error("Erreur de fetch:", error);
+      }
+    }
+
+    function setupCustomSelect(wrapper) {
+        const trigger = wrapper.querySelector('.custom-select-trigger');
+        const optionsContainer = wrapper.querySelector('.custom-select-options');
+        const initialValue = wrapper.dataset.value;
+
+        // Populate options
+        const popularCurrencies = ['USD', 'EUR', 'JPY', 'GBP', 'AUD', 'CAD', 'CHF', 'CNY'];
+        const currencies = Object.keys(rates).sort((a, b) => {
+            const aIsPopular = popularCurrencies.includes(a);
+            const bIsPopular = popularCurrencies.includes(b);
+            if (aIsPopular && !bIsPopular) return -1;
+            if (!aIsPopular && bIsPopular) return 1;
+            return a.localeCompare(b);
+        });
+
+        optionsContainer.innerHTML = '';
+        currencies.forEach(currency => {
+            const option = document.createElement('div');
+            option.classList.add('option');
+            option.dataset.value = currency;
+            option.setAttribute('role', 'option');
+            option.setAttribute('tabindex', '-1');
+            option.innerHTML = `
+                <img src="${getFlagUrl(currency)}" alt="" class="flag-icon" loading="lazy" width="24" height="18">
+                <span>${currency}</span>
+            `;
+            option.addEventListener('click', () => {
+                setSelected(wrapper, currency);
+                optionsContainer.classList.add('hidden');
+                trigger.setAttribute('aria-expanded', 'false');
+            });
+            optionsContainer.appendChild(option);
+        });
+
+        // Set initial selected value
+        setSelected(wrapper, initialValue);
+
+        // Toggle dropdown
+        trigger.addEventListener('click', () => {
+            const isExpanded = trigger.getAttribute('aria-expanded') === 'true';
+            trigger.setAttribute('aria-expanded', !isExpanded);
+            optionsContainer.classList.toggle('hidden', isExpanded);
+            if (!isExpanded) {
+              optionsContainer.querySelector(`[data-value="${wrapper.dataset.value}"]`)?.focus();
+            }
+        });
+    }
+
+    function setSelected(wrapper, currencyCode) {
+        wrapper.dataset.value = currencyCode;
+        const trigger = wrapper.querySelector('.custom-select-trigger');
+        trigger.innerHTML = `
+            <img src="${getFlagUrl(currencyCode)}" alt="" class="flag-icon" width="32" height="24">
+            <span class="currency-code">${currencyCode}</span>
+        `;
+        convert('from');
+    }
+    
+    document.addEventListener('click', (e) => {
+        if (!fromCurrencyWrapper.contains(e.target)) {
+            fromCurrencyWrapper.querySelector('.custom-select-options').classList.add('hidden');
+            fromCurrencyWrapper.querySelector('.custom-select-trigger').setAttribute('aria-expanded', 'false');
+        }
+        if (!toCurrencyWrapper.contains(e.target)) {
+            toCurrencyWrapper.querySelector('.custom-select-options').classList.add('hidden');
+            toCurrencyWrapper.querySelector('.custom-select-trigger').setAttribute('aria-expanded', 'false');
+        }
+    });
+
+    function convert(source) {
+      if (isUpdating || Object.keys(rates).length === 0) return;
+      isUpdating = true;
+
+      const fromCurrency = fromCurrencyWrapper.dataset.value;
+      const toCurrency = toCurrencyWrapper.dataset.value;
+      
+      const rateFrom = rates[fromCurrency];
+      const rateTo = rates[toCurrency];
+      const conversionRate = rateTo / rateFrom;
+
+      if (source === 'from') {
+        const sourceAmount = parseFloat(fromAmountInput.value);
+        toAmountInput.value = isNaN(sourceAmount) ? '0.00' : (sourceAmount * conversionRate).toFixed(2);
+      } else {
+        const sourceAmount = parseFloat(toAmountInput.value);
+        fromAmountInput.value = isNaN(sourceAmount) ? '0.00' : (sourceAmount / conversionRate).toFixed(2);
+      }
+
+      const singleUnitRate = (1 / rateFrom) * rateTo;
+      rateInfo.textContent = `1 ${fromCurrency} = ${singleUnitRate.toFixed(4)} ${toCurrency}`;
+      
+      isUpdating = false;
+    }
+    
+    swapBtn.addEventListener('click', () => {
+      const fromCurrency = fromCurrencyWrapper.dataset.value;
+      const toCurrency = toCurrencyWrapper.dataset.value;
+      setSelected(fromCurrencyWrapper, toCurrency);
+      setSelected(toCurrencyWrapper, fromCurrency);
+    });
+
+    fromAmountInput.addEventListener('input', () => convert('from'));
+    toAmountInput.addEventListener('input', () => convert('to'));
+
+    fetchRates();
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
