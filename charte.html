@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="bee.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Notre Charte - La Ruche</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body {
+        font-family: sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      .pillar-card {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+      }
+      .pillar-card:hover {
+        transform: translateY(-8px) scale(1.02);
+        box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.15);
+      }
+    </style>
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/"
+  }
+}
+</script>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel" data-type="module">
+import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom/client';
+
+// --- Start of components/Icons.tsx ---
+const IconWrapper = ({ children, className }) => <div className={`w-6 h-6 ${className}`}>{children}</div>;
+const MenuIcon = () => <IconWrapper><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg></IconWrapper>;
+const CloseIcon = () => <IconWrapper><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></IconWrapper>;
+
+const GithubIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+        <path fillRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.168 6.839 9.49.5.092.682-.217.682-.482 0-.237-.009-.868-.014-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.031-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.203 2.398.1 2.651.64.7 1.03 1.595 1.03 2.688 0 3.848-2.338 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.577.688.48A10.001 10.001 0 0022 12c0-5.523-4.477-10-10-10z" clipRule="evenodd" />
+    </svg>
+);
+
+const YoutubeIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z" />
+    </svg>
+);
+
+const CodeIcon = ({ className }) => <IconWrapper className={className}><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" /></svg></IconWrapper>;
+const PrivacyIcon = ({ className }) => <IconWrapper className={className}><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.6-3.75m-.6 0A11.959 11.959 0 0 0 12 2.75a11.959 11.959 0 0 0-8.402 3.25" /></svg></IconWrapper>;
+const LeafIcon = ({ className }) => <IconWrapper className={className}><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9.13 4.144c-1.352.923-1.63 2.805-.632 4.093l.4.532a3 3 0 0 0 4.167 1.016l5.053-2.916a3 3 0 0 0 1.016-4.167l-.532-.4a3 3 0 0 0-4.093.632L12 5.25l-2.87-1.106Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18Z" /></svg></IconWrapper>;
+const BrowserIcon = ({ className }) => <IconWrapper className={className}><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c.251-.044.502-.08.75-.104m0 0a3.375 3.375 0 0 1 3 0m0 0c.248.024.499.06.75.104m-4.5 0v5.714c0 .884.354 1.666.98 2.251l2.52 2.52c.635.635 1.667.635 2.302 0l2.52-2.52a3.375 3.375 0 0 0 .98-2.251V3.104m-12 0a2.25 2.25 0 0 0-2.25 2.25v10.5a2.25 2.25 0 0 0 2.25 2.25h14.5a2.25 2.25 0 0 0 2.25-2.25v-10.5a2.25 2.25 0 0 0-2.25-2.25H9.75Z" /></svg></IconWrapper>;
+const UsersIcon = ({ className }) => <IconWrapper className={className}><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m-7.5-2.962c.57-1.007 1.077-2.134 1.48-3.337m-3.86-5.252a11.933 11.933 0 0 1 3.86 5.252m0 0a11.933 11.933 0 0 0 3.86-5.252m-3.86 5.252a11.933 11.933 0 0 1-3.86-5.252M12 12.75a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm-3.75 3.75a3.75 3.75 0 0 0-3.75 3.75v.75h15v-.75a3.75 3.75 0 0 0-3.75-3.75h-7.5Z" /></svg></IconWrapper>;
+const AccessibilityIcon = ({ className }) => <IconWrapper className={className}><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739a6.037 6.037 0 0 1-5.63 6.495M12.75 15.75a3 3 0 0 1-3-3M12.75 15.75a3 3 0 0 0 3-3m-3 3h-3a3 3 0 0 0-3 3m0 0v-3m0 3h3m-3 0a3 3 0 0 1-3-3m3 3a3 3 0 0 1 3-3m-6 0v-3a3 3 0 0 1 3-3h3a3 3 0 0 1 3 3v3m-3-3a3 3 0 0 0-3-3m-3 3a3 3 0 0 0 3-3m-3 3h3" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 3a9 9 0 1 0 9 9" /></svg></IconWrapper>;
+// --- End of components/Icons.tsx ---
+
+// --- Start of components/Header.tsx ---
+const Header = () => {
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const navLinks = [
+            { name: 'Open-source', href: 'github.html' },
+        { name: 'La Ruche', href: 'outils.html' },
+        { name: 'Miel', href: 'beta.html' },
+        { name: 'A propos', href: 'apropos.html' },
+    ];
+
+    return (
+        <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-lg shadow-sm transition-all duration-300">
+            <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex items-center justify-between h-20">
+                    <div className="flex-shrink-0">
+                        <a href="index.html" className="flex items-center gap-3 group">
+                            <img src="bee.png" alt="Logo La Ruche" className="h-9 w-auto transition-transform duration-300 group-hover:rotate-[-15deg]" />
+                            <div className="flex items-center">
+                                <span className="font-bold text-2xl text-gray-800 tracking-tight">La Ruche</span>
+                                <span className="ml-2 bg-purple-100 text-purple-800 text-xs font-bold px-2.5 py-1 rounded-full">BETA</span>
+                            </div>
+                        </a>
+                    </div>
+                    <div className="hidden md:flex items-center space-x-8">
+                        {navLinks.map((link) => (
+                            <a key={link.name} href={link.href} className="text-gray-600 hover:text-purple-600 font-medium transition-colors duration-200">
+                                {link.name}
+                            </a>
+                        ))}
+                    </div>
+                    <div className="md:hidden flex items-center">
+                        <button
+                            onClick={() => setIsMenuOpen(!isMenuOpen)}
+                            className="inline-flex items-center justify-center p-2 rounded-md text-gray-600 hover:text-purple-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-purple-500"
+                            aria-controls="mobile-menu"
+                            aria-expanded={isMenuOpen}
+                        >
+                            <span className="sr-only">Ouvrir le menu principal</span>
+                            {isMenuOpen ? <CloseIcon /> : <MenuIcon />}
+                        </button>
+                    </div>
+                </div>
+            </nav>
+            {isMenuOpen && (
+                <div className="md:hidden" id="mobile-menu">
+                    <div className="px-2 pt-2 pb-4 space-y-1 sm:px-3 bg-white border-t border-gray-200/80">
+                        {navLinks.map((link) => (
+                             <a key={link.name} href={link.href} className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-purple-600 hover:bg-gray-50">
+                                {link.name}
+                            </a>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </header>
+    );
+};
+// --- End of components/Header.tsx ---
+
+// --- Start of components/Footer.tsx ---
+const Footer = () => {
+    return (
+        <footer className="bg-[#110D25] text-gray-300">
+            <div className="max-w-7xl mx-auto py-16 px-4 sm:px-6 lg:px-8">
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8">
+                    <div className="col-span-2 lg:col-span-2">
+                        <a href="index.html" className="flex items-center gap-3 group">
+                            <img src="bee.png" alt="Logo La Ruche" className="h-9 w-auto transition-transform duration-300 group-hover:rotate-[-15deg]" />
+                            <div className="flex items-center">
+                                <span className="font-bold text-2xl text-white tracking-tight">La Ruche</span>
+                            </div>
+                        </a>
+                        <p className="mt-4 text-sm text-gray-400 max-w-xs">
+                            Une collection d'outils front-end, gratuits, open-source et sans tracking.
+                        </p>
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-semibold text-gray-200 tracking-wider uppercase">Outils</h3>
+                        <ul className="mt-4 space-y-3">
+  <li><a href="tools/convertisseur.html" className="text-base text-gray-400 hover:text-white transition-colors duration-200">Convertisseurs</a></li>
+                            <li><a href="outils.html" className="text-base text-gray-400 hover:text-white transition-colors duration-200">Générateurs</a></li>
+                            <li><a href="tools/jeux.html" className="text-base text-gray-400 hover:text-white transition-colors duration-200">Jeux & Utilitaires</a></li>
+                            <li><a href="tools/soustitre.html" className="text-base text-gray-400 hover:text-white transition-colors duration-200">Sous-titres IA</a></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-semibold text-gray-200 tracking-wider uppercase">La Ruche</h3>
+                        <ul className="mt-4 space-y-3">
+                            <li><a href="apropos.html" className="text-base text-gray-400 hover:text-white transition-colors duration-200">À propos</a></li>
+                            <li><a href="charte.html" className="text-base text-gray-400 hover:text-white transition-colors duration-200">Charte</a></li>
+                            <li><a href="roadmap.html" className="text-base text-gray-400 hover:text-white transition-colors duration-200">Roadmap</a></li>
+                            <li><a href="https://revolut.me/oscarn60z" className="text-base text-gray-400 hover:text-white transition-colors duration-200">Contribuer</a></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-semibold text-gray-200 tracking-wider uppercase">Légal</h3>
+                        <ul className="mt-4 space-y-3">
+                            <li><a href="mentionslegale.html" className="text-base text-gray-400 hover:text-white transition-colors duration-200">Mentions légales</a></li>
+                            <li><a href="confidentialite.html" className="text-base text-gray-400 hover:text-white transition-colors duration-200">Politique de confidentialité</a></li>
+                            <li><a href="beta.html" className="text-base text-gray-400 hover:text-white transition-colors duration-200">Licence Apache 2.0</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div className="mt-12 border-t border-gray-700/50 pt-8 flex items-center justify-between flex-wrap gap-4">
+                    <p className="text-base text-gray-500">&copy; {new Date().getFullYear()} La Ruche. Tous droits réservés.</p>
+                    <div className="flex space-x-6">
+                        <a href="https://github.com/starred" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors duration-200">
+                            <span className="sr-only">GitHub</span>
+                            <GithubIcon />
+                        </a>
+                        <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors duration-200">
+                            <span className="sr-only">YouTube</span>
+                            <YoutubeIcon />
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    );
+};
+// --- End of components/Footer.tsx ---
+
+const HexagonBackground = ({ className }) => {
+    const svgPattern = `<svg id="pattern-hex" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="hexagons" patternUnits="userSpaceOnUse" width="70" height="121.24" patternTransform="scale(1.2) rotate(0)"><svg width="70" height="121.24" y="0"><path d="M35 0L70 20.21v40.42L35 80.84 0 60.63V20.21z" stroke="rgba(109, 40, 217, 0.07)" fill="none" stroke-width="1.5"></path></svg></pattern></defs><rect width="100%" height="100%" fill="url(#hexagons)"></rect></svg>`;
+    const dataUrl = `url("data:image/svg+xml,${encodeURIComponent(svgPattern)}")`;
+
+    return (
+        <div
+            className={`absolute inset-0 z-0 opacity-50 ${className}`}
+            style={{ backgroundImage: dataUrl }}
+        ></div>
+    );
+};
+
+const PillarCard = ({ icon, title, children }) => (
+    <div className="pillar-card relative p-8 bg-white/60 backdrop-blur-xl border border-gray-200/80 rounded-2xl shadow-lg overflow-hidden">
+        <div className="relative z-10">
+            <div className="flex items-center justify-center w-16 h-16 bg-gradient-to-br from-violet-100 to-purple-200 rounded-2xl text-purple-700 mb-6">
+                {icon}
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900">{title}</h3>
+            <p className="mt-3 text-gray-600 leading-relaxed">{children}</p>
+        </div>
+    </div>
+);
+
+
+const CharterPage = () => {
+    const pillars = [
+        {
+            icon: <CodeIcon className="w-8 h-8" />,
+            title: "Open Source par Essence",
+            content: "Notre code est notre parole. Chaque outil est développé de manière transparente sur GitHub, sous licence Apache 2.0. Nous croyons en la force de la collaboration pour créer des outils plus robustes, sécurisés et innovants."
+        },
+        {
+            icon: <AccessibilityIcon className="w-8 h-8" />,
+            title: "Gratuité & Accessibilité",
+            content: "La Ruche est et restera gratuite. Pas de frais cachés, pas de version 'premium'. Nous nous engageons à rendre nos outils accessibles à tous, en respectant les standards (WCAG AA) pour une expérience inclusive."
+        },
+        {
+            icon: <PrivacyIcon className="w-8 h-8" />,
+            title: "Respect de la Vie Privée",
+            content: "Votre vie privée est non-négociable. Zéro tracking, zéro cookie publicitaire, zéro collecte de données personnelles. Vos informations restent sur votre appareil, point final."
+        },
+        {
+            icon: <LeafIcon className="w-8 h-8" />,
+            title: "Éco-conception & Performance",
+            content: "Nous concevons des outils légers et performants pour minimiser notre empreinte carbone. Un code optimisé et une infrastructure 'serverless' pour un impact environnemental réduit."
+        },
+        {
+            icon: <BrowserIcon className="w-8 h-8" />,
+            title: "Front-end d'Abord",
+            content: "Tout se passe dans votre navigateur. Cette approche garantit non seulement la confidentialité et la sécurité, mais aussi une rapidité d'exécution et une fonctionnalité hors-ligne pour la plupart de nos outils."
+        },
+        {
+            icon: <UsersIcon className="w-8 h-8" />,
+            title: "Communauté & Collaboration",
+            content: "La Ruche est plus qu'un ensemble d'outils, c'est une communauté. Nous encourageons activement les contributions, les suggestions et les échanges pour faire grandir l'écosystème ensemble."
+        }
+    ];
+
+    return (
+        <div className="relative pt-20 pb-24 overflow-hidden">
+             <div className="absolute inset-0 z-0">
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-violet-200/50 to-transparent"></div>
+                <HexagonBackground />
+            </div>
+
+            <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="text-center py-16">
+                    <img src="bee.png" alt="Logo La Ruche" className="h-20 w-auto mx-auto mb-6" />
+                    <h1 className="text-5xl md:text-7xl font-bold text-gray-900 tracking-tight">Notre Charte</h1>
+                    <p className="mt-6 max-w-3xl mx-auto text-xl text-gray-600">
+                        Les principes fondamentaux qui guident chaque ligne de code et chaque décision que nous prenons. C'est notre ADN, notre engagement envers vous.
+                    </p>
+                </div>
+
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mt-12">
+                    {pillars.map((pillar, index) => (
+                        <PillarCard key={index} icon={pillar.icon} title={pillar.title}>
+                            {pillar.content}
+                        </PillarCard>
+                    ))}
+                </div>
+
+                <div className="mt-24 text-center">
+                     <h2 className="text-3xl font-bold text-gray-900">Rejoignez le mouvement</h2>
+                    <p className="mt-4 max-w-2xl mx-auto text-lg text-gray-600">
+                        La Ruche est construite par et pour la communauté. Si nos valeurs résonnent avec les vôtres, nous serions ravis de vous compter parmi nous.
+                    </p>
+                     <div className="mt-8 flex justify-center gap-4">
+                        <a href="https://github.com/starred" target="_blank" rel="noopener noreferrer" className="bg-gray-800 hover:bg-gray-900 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300 inline-flex items-center gap-2">
+                           <GithubIcon /> Voir le code
+                        </a>
+                        <a href="roadmap.html" className="bg-white text-gray-800 font-semibold py-3 px-6 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors duration-300">
+                           Découvrir la roadmap
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    );
+};
+
+function App() {
+  return (
+    <div className="bg-gray-50 text-gray-900 font-sans antialiased">
+        <Header />
+        <main>
+            <CharterPage />
+        </main>
+        <Footer />
+    </div>
+  );
+}
+
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error("Could not find root element to mount to");
+}
+
+const root = ReactDOM.createRoot(rootElement);
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+    </script>
+</body>
+</html>
