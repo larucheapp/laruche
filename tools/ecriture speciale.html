@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche" >
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Écritures Spéciales - La Ruche</title>
+  <meta name="description" content="Transformez votre texte avec des polices originales et copiez-les facilement pour vos réseaux sociaux.">
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px; /* par défaut, peut être changé via body[data-size] */
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; flex-direction:column;
+      padding:48px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{
+      display:flex; flex-direction:column; align-items:center; position:relative;
+      margin: auto;
+    }
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+    .form-group{display:flex; flex-direction:column; gap:8px}
+    .form-label{font-weight:500; color:var(--color-text-primary)}
+    .form-input{
+      width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      font-size:1rem; color:var(--color-text-primary); background:var(--color-bg);
+      transition:border-color .2s, box-shadow .2s;
+    }
+    .form-input:focus{outline:none; border-color:var(--color-violet); box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+    .actions{display:flex; justify-content:flex-end; gap:12px}
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:500; padding:10px 16px; border-radius:var(--radius-md); border:none; cursor:pointer;
+      transition:background-color .2s, box-shadow .2s; font-size:14px;
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn-primary{background:var(--color-violet); color:#fff}
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark)}
+    .btn-primary:disabled{background:#A78BFA; cursor:not-allowed}
+    .status-text{font-size:14px; color:var(--color-text-secondary); text-align:center; min-height:21px}
+
+    /* Styles spécifiques à l'outil Écritures Spéciales */
+    .results-container {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      max-height: 500px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    @media (min-width: 768px) {
+      .results-container {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+    
+    .font-card {
+      background: var(--color-bg-alt);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: border-color 0.2s;
+    }
+    .font-card:hover {
+      border-color: var(--color-violet);
+    }
+    
+    .font-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-text-secondary);
+      font-weight: 600;
+    }
+    
+    .font-preview {
+      font-size: 1.125rem;
+      word-break: break-word;
+      min-height: 28px;
+      color: var(--color-text-primary);
+    }
+
+    .copy-btn {
+      align-self: flex-start;
+      background: white;
+      border: 1px solid var(--color-border);
+      color: var(--color-text-primary);
+      padding: 6px 12px;
+      font-size: 0.875rem;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .copy-btn:hover {
+      border-color: var(--color-violet);
+      color: var(--color-violet);
+    }
+    .copy-btn svg {
+      width: 14px;
+      height: 14px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* Custom Scrollbar for results */
+    .results-container::-webkit-scrollbar {
+      width: 6px;
+    }
+    .results-container::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .results-container::-webkit-scrollbar-thumb {
+      background-color: #D1D5DB;
+      border-radius: 20px;
+    }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--color-text-primary);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      opacity: 0;
+      transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s;
+      z-index: 100;
+      pointer-events: none;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    }
+    .toast.visible {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="wide">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Écritures Spéciales</h1>
+
+      <!-- ZONE OUTIL -->
+      <div class="generator-card" role="region" aria-label="Générateur de polices spéciales">
+        
+        <div class="form-group">
+          <label for="inputText" class="form-label">Votre texte à transformer</label>
+          <textarea 
+            id="inputText" 
+            class="form-input" 
+            rows="3" 
+            placeholder="Tapez votre texte ici..."
+            autofocus
+          >La Ruche</textarea>
+        </div>
+
+        <div id="resultsGrid" class="results-container">
+          <!-- Les résultats seront injectés ici par JS -->
+        </div>
+
+        <div class="status-text">Cliquez sur un style pour copier</div>
+      </div>
+      <!-- /ZONE OUTIL -->
+    </div>
+  </main>
+
+  <div id="toast" class="toast">Texte copié dans le presse-papier !</div>
+
+  <script>
+    // Background hex grid — NE PAS MODIFIER (doit rester visuellement identique)
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+
+        const size = 24;                         // identique
+        const hexW = 2 * size;                   // identique
+        const hexH = Math.sqrt(3) * size;        // identique
+        const stepX = hexW * 3/4;                // identique
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)'; // identique
+        ctx.lineWidth = 1;                       // identique
+
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX;
+            const y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i;
+              const px = x + size * Math.cos(a);
+              const py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+
+    // LOGIQUE SPÉCIFIQUE À L'OUTIL
+    (function() {
+      const inputText = document.getElementById('inputText');
+      const resultsGrid = document.getElementById('resultsGrid');
+      const toast = document.getElementById('toast');
+
+      // Dictionnaires de caractères
+      const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+      
+      const styles = [
+        {
+          name: "Gras (Serif)",
+          map: "𝐚𝐛𝐜𝐝𝐞𝐟𝐠𝐡𝐢𝐣𝐤𝐥𝐦𝐧𝐨𝐩𝐪𝐫𝐬𝐭𝐮𝐯𝐰𝐱𝐲𝐳𝐀𝐁𝐂𝐃𝐄𝐅𝐆𝐇𝐈𝐉𝐊𝐋𝐌𝐍𝐎𝐏𝐐𝐑𝐒𝐓𝐔𝐕𝐖𝐗𝐘𝐙𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗"
+        },
+        {
+          name: "Gras (Sans-Serif)",
+          map: "𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝘅𝘆𝘇𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵"
+        },
+        {
+          name: "Italique (Serif)",
+          map: "𝑎𝑏𝑐𝑑𝑒𝑓𝑔ℎ𝑖𝑗𝑘𝑙𝑚𝑛𝑜𝑝𝑞𝑟𝑠𝑡𝑢𝑣𝑤𝑥𝑦𝑧𝐴𝐵𝐶𝐷𝐸𝐹𝐺𝐻𝐼𝐽𝐾𝐿𝑀𝑁𝑂𝑃𝑄𝑅𝑆𝑇𝑈𝑉𝑊𝑋𝑌𝑍0123456789"
+        },
+        {
+          name: "Italique (Sans-Serif)",
+          map: "𝘢𝘣𝘤𝘥𝘦𝘧𝘨𝘩𝘪𝘫𝘬𝘭𝘮𝘯𝘰𝘱𝘲𝘳𝘴𝘵𝘶𝘷𝘸𝘹𝘺𝘻𝘈𝘉𝘊𝘋𝘌𝘍𝘎𝘏𝘐𝘑𝘒𝘓𝘔𝘕𝘖𝘗𝘘𝘙𝘚𝘛𝘜𝘝𝘞𝘟𝘠𝘡0123456789"
+        },
+        {
+          name: "Script (Cursive)",
+          map: "𝒶𝒷𝒸𝒹ℯ𝒻ℊ𝒽𝒾𝒿𝓀𝓁𝓂𝓃ℴ𝓅𝓆𝓇𝓈𝓉𝓊𝓋𝓌𝓍𝓎𝓏𝒜ℬ𝒞𝒟ℰℱ𝒢ℋℐ𝒥𝒦ℒℳ𝒩𝒪𝒫𝒬ℛ𝒮𝒯𝒰𝒱𝒲𝒳𝒴𝒵0123456789"
+        },
+        {
+          name: "Script Gras",
+          map: "𝓪𝓫𝓬𝓭𝓮𝓯𝓰𝓱𝓲𝓳𝓴𝓵𝓶𝓷𝓸𝓹𝓺𝓻𝓼𝓽𝓾𝓿𝔀𝔁𝔂𝔃𝓐𝓑𝓒𝓓𝓔𝓕𝓖𝓗𝓘𝓙𝓚𝓛𝓜𝓝𝓞𝓟𝓠𝓡𝓢𝓣𝓤𝓥𝓦𝓧𝓨𝓩0123456789"
+        },
+        {
+          name: "Monospace",
+          map: "𝚊𝚋𝚌𝚍𝚎𝚏𝚐𝚑𝚒𝚓𝚔𝚕𝚖𝚗𝚘𝚙𝚚𝚛𝚜𝚝𝚞𝚟𝚠𝚡𝚢𝚣𝙰𝙱𝙲𝙳𝙴𝙵𝙶𝙷𝙸𝙹𝙺𝙻𝙼𝙽𝙾𝙿𝚀𝚁𝚂𝚃𝚄𝚅𝚆𝚇𝚈𝚉𝟶𝟷𝟸𝟹𝟺𝟻𝟼𝟽𝟾𝟿"
+        },
+        {
+          name: "Double Struck",
+          map: "𝕒𝕓𝕔𝕕𝕖𝕗𝕘𝕙𝕚𝕛𝕜𝕝𝕞𝕟𝕠𝕡𝕢𝕣𝕤𝕥𝕦𝕧𝕨𝕩𝕪𝕫𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ𝟘𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡"
+        },
+        {
+          name: "Bulles (Noir)",
+          map: "🅐🅑🅒🅓🅔🅕🅖🅗🅘🅙🅚🅛🅜🅝🅞🅟🅠🅡🅢🅣🅤🅥🅦🅧🅨🅩🅐🅑🅒🅓🅔🅕🅖🅗🅘🅙🅚🅛🅜🅝🅞🅟🅠🅡🅢🅣🅤🅥🅦🅧🅨🅩⓿➊➋➌➍➎➏➐➑➒"
+        },
+        {
+          name: "Bulles (Blanc)",
+          map: "ⓐⓑⓒⓓⓔⓕⓖⓗⓘⓙⓚⓛⓜⓝⓞⓟⓠⓡⓢⓣⓤⓥⓦⓧⓨⓩⒶⒷⒸⒹⒺⒻⒼⒽⒾⒿⓀⓁⓂⓃⓄⓅⓆⓇⓈⓉⓊⓋⓌⓍⓎⓏ⓪①②③④⑤⑥⑦⑧⑨"
+        },
+        {
+          name: "Carrés",
+          map: "🅰🅱🅲🅳🅴🅵🅶🅷🅸🉹🅺🅻🅼🅽🅾🅿🆀🆁🆂🆃🆄🆅🆆🆇🆈🆉🅰🅱🅲🅳🅴🅵🅶🅷🅸🉹🅺🅻🅼🅽🅾🅿🆀🆁🆂🆃🆄🆅🆆🆇🆈🆉0123456789"
+        },
+        {
+          name: "Gothique",
+          map: "𝔞𝔟𝔠𝔡𝔢𝔣𝔤𝔥𝔦𝔧𝔨𝔩𝔪𝔫𝔬𝔭𝔮𝔯𝔰𝔱𝔲𝔳𝔴𝔵𝔶𝔷𝔄𝔅ℭ𝔇𝔈𝔉𝔊ℌℑ𝔍𝔎𝔏𝔐𝔑𝔒𝔓𝔔ℜ𝔖𝔗𝔘𝔙𝔚𝔛𝔜ℨ0123456789"
+        },
+        {
+          name: "Gothique Gras",
+          map: "𝖆𝖇𝖈𝖉𝖊𝖋𝖌𝖍𝖎𝖏𝖐𝖑𝖒𝖓𝖔𝖕𝖖𝖗𝖘𝖙𝖚𝖛𝖜𝖝𝖞𝖟𝕬𝕭𝕮𝕯𝕰𝕱𝕲𝕳𝕴𝕵𝕶𝕷𝕸𝕹𝕺𝕻𝕼𝕽𝕾𝕿𝖀𝖁𝖂𝖃𝖄𝖅0123456789"
+        },
+        {
+          name: "Small Caps",
+          map: "ᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ0123456789"
+        }
+      ];
+
+      // Cas spécial pour Upside Down qui nécessite un reverse
+      const upsideDownMap = {
+        name: "Renversé",
+        input: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+        output: "ɐqɔpǝɟƃɥıɾʞlɯuodbɹsʇnʌʍxʎz∀𐐒ƆᗡƎℲ⅁HIſ⋊˥WNOԀÒᴚS⊥∩ΛMX⅄Z0ƖᄅƐㄣϛ9ㄥ86"
+      };
+
+      function transformText(text, mapString) {
+        let result = "";
+        for (let i = 0; i < text.length; i++) {
+          const char = text[i];
+          const index = chars.indexOf(char);
+          if (index !== -1 && mapString[index * 2]) { // Gestion des caractères multi-octets (surrogate pairs)
+             // La plupart des caractères spéciaux sont sur 2 unités de code UTF-16
+             // Pour simplifier ici, on utilise Array.from pour gérer correctement les unicode
+             // Mais comme mapString est une string simple, on va utiliser une approche indexée plus robuste:
+             result += getCharAtIndex(mapString, index) || char;
+          } else {
+            result += char;
+          }
+        }
+        return result;
+      }
+
+      // Fonction utilitaire pour récupérer le bon caractère unicode (qui peut faire 1 ou 2 length)
+      // On convertit les chaines en tableau de vrais caractères (graphemes)
+      const splitString = (str) => [...str];
+      
+      const stylesReady = styles.map(s => ({
+        name: s.name,
+        mapArray: splitString(s.map)
+      }));
+
+      function generate() {
+        const text = inputText.value || inputText.placeholder;
+        resultsGrid.innerHTML = "";
+
+        // 1. Styles classiques
+        stylesReady.forEach(style => {
+          let converted = "";
+          for (let char of text) {
+            const index = chars.indexOf(char);
+            if (index !== -1 && style.mapArray[index]) {
+              converted += style.mapArray[index];
+            } else {
+              converted += char;
+            }
+          }
+          createCard(style.name, converted);
+        });
+
+        // 2. Upside Down (Renversé)
+        let udResult = "";
+        const udInput = upsideDownMap.input;
+        const udOutput = splitString(upsideDownMap.output);
+        
+        for (let i = text.length - 1; i >= 0; i--) {
+          const char = text[i];
+          const index = udInput.indexOf(char);
+          if (index !== -1) {
+            udResult += udOutput[index];
+          } else {
+            udResult += char;
+          }
+        }
+        createCard(upsideDownMap.name, udResult);
+      }
+
+      function createCard(title, content) {
+        const card = document.createElement('div');
+        card.className = 'font-card';
+        
+        const label = document.createElement('div');
+        label.className = 'font-label';
+        label.textContent = title;
+
+        const preview = document.createElement('div');
+        preview.className = 'font-preview';
+        preview.textContent = content;
+
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.innerHTML = `
+          <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          Copier
+        `;
+        btn.onclick = () => copyToClipboard(content);
+
+        card.appendChild(label);
+        card.appendChild(preview);
+        card.appendChild(btn);
+        resultsGrid.appendChild(card);
+      }
+
+      function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+          showToast();
+        }).catch(err => {
+          console.error('Erreur copie:', err);
+        });
+      }
+
+      let toastTimeout;
+      function showToast() {
+        toast.classList.add('visible');
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+          toast.classList.remove('visible');
+        }, 2000);
+      }
+
+      // Events
+      inputText.addEventListener('input', generate);
+      
+      // Init
+      generate();
+    })();
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
