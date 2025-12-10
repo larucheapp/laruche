@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="fr" data-app="laruche" >
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Convertisseur Heures → Prix</title>
+  <meta name="description" content="Outil rapide pour freelances : calculez le montant d'une prestation à partir de votre taux horaire et du temps de travail.">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    :root{
+      --color-bg:#FFFFFF;
+      --color-bg-alt:#F7F8FA;
+      --color-border:#E9EAF0;
+      --color-text-primary:#141417;
+      --color-text-secondary:#6B7280;
+      --color-violet:#7C3AED;
+      --color-violet-dark:#6D28D9;
+      --radius-md:12px;
+      --radius-lg:14px;
+      --tool-max-w:480px; /* par défaut, peut être changé via body[data-size] */
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%;background-color:var(--color-bg)}
+    body{
+      height:100vh; overflow:hidden; display:flex; flex-direction:column;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      color:var(--color-text-primary); line-height:1.5; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    body[data-size="default"]{--tool-max-w:480px}
+    body[data-size="wide"]{--tool-max-w:960px}
+    body[data-size="xl"]{--tool-max-w:1200px}
+
+    #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+
+    .app-header{
+      flex-shrink:0; background:var(--color-bg-alt); border-bottom:1px solid var(--color-border);
+      padding:0 24px; display:flex; align-items:center; height:70px;
+    }
+    .app-header a{display:inline-flex; align-items:center}
+    .logo-img{height:70px; width:auto; vertical-align:middle}
+
+    .main-content{
+      flex-grow:1; display:flex; align-items:center; justify-content:center;
+      padding:48px 24px; overflow-y:auto;
+    }
+    .tool-wrapper{display:flex; flex-direction:column; align-items:center; position:relative}
+    .tool-title{
+      font-size:1.75rem; font-weight:600; padding:12px 28px;
+      background:linear-gradient(45deg,var(--color-violet),var(--color-violet-dark));
+      color:#fff; border-radius:var(--radius-md); margin-bottom:-20px; position:relative; z-index:5;
+      box-shadow:0 4px 14px -4px rgba(124,58,237,.4);
+    }
+    .generator-card{
+      background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg);
+      padding:28px; padding-top:40px; width:100%; max-width:var(--tool-max-w);
+      box-shadow:0 4px 6px -1px rgb(0 0 0 / 5%), 0 2px 4px -2px rgb(0 0 0 / 5%);
+      display:flex; flex-direction:column; gap:24px;
+    }
+    .form-group{display:flex; flex-direction:column; gap:8px}
+    .form-label{font-weight:500; color:var(--color-text-primary)}
+    .form-input{
+      width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:var(--radius-md);
+      font-size:1rem; color:var(--color-text-primary); background:var(--color-bg);
+      transition:border-color .2s, box-shadow .2s;
+    }
+    .form-input:focus{outline:none; border-color:var(--color-violet); box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+    .actions{display:flex; justify-content:space-between; align-items:center; gap:12px}
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:500; padding:10px 16px; border-radius:var(--radius-md); border:none; cursor:pointer;
+      transition:background-color .2s, box-shadow .2s; font-size:14px;
+    }
+    .btn:focus-visible{outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px rgba(124,58,237,.4)}
+    .btn-primary{background:var(--color-violet); color:#fff}
+    .btn-primary:hover:not(:disabled){background:var(--color-violet-dark)}
+    .btn-primary:disabled{background:#A78BFA; cursor:not-allowed}
+    .status-text{font-size:14px; color:var(--color-text-secondary); text-align:center; min-height:21px}
+
+    /* Styles spécifiques à l'outil Convertisseur */
+    .input-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .result-container {
+      background-color: var(--color-bg-alt);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .result-label {
+      font-size: 0.875rem;
+      color: var(--color-text-secondary);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .result-value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--color-violet);
+      line-height: 1.1;
+    }
+    @media (max-width: 450px) {
+      .input-row { grid-template-columns: 1fr; }
+      .actions { flex-direction: column-reverse; }
+      .btn { width: 100%; }
+    }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body data-size="default">
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="app-header">
+    <a href="index.html" aria-label="Accueil">
+      <img src="logo-2.png" alt="Logo La Ruche" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-content">
+    <div class="tool-wrapper">
+      <h1 class="tool-title">Convertisseur Heures → Prix</h1>
+
+      <!-- ZONE OUTIL -->
+      <div class="generator-card" role="region" aria-label="Convertisseur Heures → Prix">
+        
+        <div class="input-row">
+          <div class="form-group">
+            <label for="hourly-rate" class="form-label">Taux horaire (€)</label>
+            <input type="number" id="hourly-rate" class="form-input" placeholder="ex: 350" min="0" step="0.5" autofocus>
+          </div>
+
+          <div class="form-group">
+            <label for="hours-count" class="form-label">Nombre d'heures</label>
+            <input type="number" id="hours-count" class="form-input" placeholder="ex: 7" min="0" step="0.25">
+          </div>
+        </div>
+
+        <div class="result-container" aria-live="polite">
+          <span class="result-label">Montant total estimé</span>
+          <span class="result-value" id="result-display">0,00 €</span>
+        </div>
+
+        <div class="actions">
+          <button type="button" id="btn-reset" class="btn" style="color: var(--color-text-secondary); background: transparent; border: 1px solid var(--color-border);">
+            Réinitialiser
+          </button>
+          <button type="button" id="btn-export" class="btn btn-primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Exporter en PDF
+          </button>
+        </div>
+
+      </div>
+      <!-- /ZONE OUTIL -->
+    </div>
+  </main>
+
+  <script>
+    // Logic for Converter Tool
+    (function() {
+      const rateInput = document.getElementById('hourly-rate');
+      const hoursInput = document.getElementById('hours-count');
+      const resultDisplay = document.getElementById('result-display');
+      const resetBtn = document.getElementById('btn-reset');
+      const exportBtn = document.getElementById('btn-export');
+
+      // Initialize jsPDF
+      const { jsPDF } = window.jspdf;
+
+      const formatter = new Intl.NumberFormat('fr-FR', {
+        style: 'currency',
+        currency: 'EUR',
+        minimumFractionDigits: 2
+      });
+
+      function calculate() {
+        const rate = parseFloat(rateInput.value);
+        const hours = parseFloat(hoursInput.value);
+        let total = 0;
+
+        if (!isNaN(rate) && !isNaN(hours)) {
+          total = rate * hours;
+        }
+        resultDisplay.textContent = formatter.format(total);
+        return total;
+      }
+
+      function reset() {
+        rateInput.value = '';
+        hoursInput.value = '';
+        resultDisplay.textContent = formatter.format(0);
+        rateInput.focus();
+      }
+
+      function exportPDF() {
+        const rate = parseFloat(rateInput.value);
+        const hours = parseFloat(hoursInput.value);
+        
+        if (isNaN(rate) || isNaN(hours)) {
+          alert("Veuillez saisir un taux et un nombre d'heures valides pour générer le PDF.");
+          return;
+        }
+
+        const total = rate * hours;
+        const dateStr = new Date().toLocaleDateString('fr-FR');
+        
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 20;
+        
+        // Titre
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(22);
+        doc.setTextColor(20, 20, 23);
+        doc.text("Devis Estimatif / Calcul", margin, 30);
+        
+        // Date
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(107, 114, 128);
+        doc.text(`Date : ${dateStr}`, margin, 40);
+        
+        // Ligne de séparation
+        doc.setDrawColor(233, 234, 240);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 48, pageWidth - margin, 48);
+        
+        // Détails
+        let y = 70;
+        doc.setFontSize(12);
+        doc.setTextColor(20, 20, 23);
+        
+        // Taux
+        doc.text(`Taux horaire :`, margin, y);
+        doc.text(`${formatter.format(rate)} / heure`, pageWidth - margin, y, { align: "right" });
+        
+        y += 12;
+        // Heures
+        doc.text(`Temps de travail :`, margin, y);
+        doc.text(`${hours} heures`, pageWidth - margin, y, { align: "right" });
+        
+        // Bloc Total
+        y += 25;
+        doc.setFillColor(247, 248, 250); // Fond gris clair
+        doc.roundedRect(margin, y - 12, pageWidth - (margin * 2), 36, 3, 3, "F");
+        
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(16);
+        doc.setTextColor(124, 58, 237); // Couleur violette
+        doc.text(`Montant Total`, margin + 12, y + 10);
+        doc.text(formatter.format(total), pageWidth - margin - 12, y + 10, { align: "right" });
+        
+        // Footer (Disclaimer)
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(9);
+        doc.setTextColor(156, 163, 175);
+        doc.text("Ce document a été généré via l'outil de calcul La Ruche.", pageWidth / 2, pageHeight - 20, { align: "center" });
+        
+        doc.save(`estimation_${Date.now()}.pdf`);
+      }
+
+      rateInput.addEventListener('input', calculate);
+      hoursInput.addEventListener('input', calculate);
+      resetBtn.addEventListener('click', reset);
+      exportBtn.addEventListener('click', exportPDF);
+    })();
+
+    // Background hex grid — NE PAS MODIFIER (doit rester visuellement identique)
+    (function(){
+      const c = document.getElementById('bg-canvas');
+      const ctx = c.getContext('2d');
+      function draw(){
+        const dpr = window.devicePixelRatio || 1;
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr; c.height = rect.height * dpr;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.clearRect(0,0,rect.width,rect.height);
+
+        const size = 24;                         // identique
+        const hexW = 2 * size;                   // identique
+        const hexH = Math.sqrt(3) * size;        // identique
+        const stepX = hexW * 3/4;                // identique
+        ctx.strokeStyle = 'rgba(124,58,237,0.10)'; // identique
+        ctx.lineWidth = 1;                       // identique
+
+        for(let row=0; row*hexH < rect.height + hexH; row++){
+          for(let col=0; col*stepX < rect.width + hexW; col++){
+            const x = col * stepX;
+            const y = row * hexH + (col % 2 ? hexH/2 : 0);
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+              const a = 2 * Math.PI / 6 * i;
+              const px = x + size * Math.cos(a);
+              const py = y + size * Math.sin(a);
+              if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      window.addEventListener('resize', draw, {passive:true});
+      draw();
+    })();
+  </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
