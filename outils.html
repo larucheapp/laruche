@@ -16,7 +16,7 @@
       }
 
       /* 
-       * 3D Hexagon Styles (KEPT AS REQUESTED)
+       * 3D Hexagon Styles (UPDATED: LIGHTER PURPLE)
        */
 
       .hex-card {
@@ -41,14 +41,15 @@
       .hex-card:hover {
         transform: translateY(-8px) scale(1.05) translateZ(0);
         -webkit-transform: translateY(-8px) scale(1.05) translateZ(0);
-        filter: drop-shadow(0 15px 15px rgba(139, 92, 246, 0.5)); 
+        filter: drop-shadow(0 15px 15px rgba(167, 139, 250, 0.6)); 
         z-index: 20;
       }
 
       .hex-border {
         width: 100%;
         height: 100%;
-        background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 30%, #4c1d95 100%);
+        /* Lighter Gradient */
+        background: linear-gradient(135deg, #c4b5fd 0%, #8b5cf6 30%, #6d28d9 100%);
         clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
         -webkit-clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
         display: flex;
@@ -59,7 +60,8 @@
       .hex-inner {
         width: 96%;
         height: 96%;
-        background: linear-gradient(to bottom, #2e1065, #17152e);
+        /* Lighter Inner Background */
+        background: linear-gradient(to bottom, #4c1d95, #2e1065);
         clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
         -webkit-clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
         display: flex;
@@ -69,7 +71,7 @@
         text-align: center;
         padding: 1rem;
         position: relative;
-        box-shadow: inset 0 0 15px rgba(0,0,0,0.8); 
+        box-shadow: inset 0 0 15px rgba(0,0,0,0.5); 
       }
 
       .hex-inner::after {
@@ -79,18 +81,18 @@
         left: 0;
         right: 0;
         height: 45%;
-        background: linear-gradient(to bottom, rgba(255,255,255,0.1), transparent);
+        background: linear-gradient(to bottom, rgba(255,255,255,0.15), transparent);
         clip-path: polygon(50% 0%, 100% 0, 100% 100%, 0 100%, 0 0);
         -webkit-clip-path: polygon(50% 0%, 100% 0, 100% 100%, 0 100%, 0 0);
         pointer-events: none;
       }
       
       .hex-card:hover .hex-border {
-        background: linear-gradient(135deg, #c4b5fd 0%, #8b5cf6 50%, #5b21b6 100%);
+        background: linear-gradient(135deg, #ddd6fe 0%, #a78bfa 50%, #7c3aed 100%);
       }
 
       .hex-card:hover .hex-inner {
-        background: linear-gradient(to bottom, #3b0764, #1e1b4b);
+        background: linear-gradient(to bottom, #5b21b6, #3b0764);
       }
 
       ::-webkit-scrollbar {
@@ -172,7 +174,7 @@ const Header = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const navLinks = [
         { name: 'Open-source', href: 'github.html' },
-        { name: 'La Ruche', href: 'outils.html' },
+        { name: 'Ruche', href: 'outils.html' },
         { name: 'Miel', href: 'beta.html' },
         { name: 'A propos', href: 'apropos.html' },
     ];
@@ -192,7 +194,7 @@ const Header = () => {
                     </div>
                     <div className="hidden md:flex items-center space-x-8">
                         {navLinks.map((link) => (
-                            <a key={link.name} href={link.href} className="text-gray-600 hover:text-purple-600 font-medium transition-colors duration-200 text-sm tracking-wide uppercase">
+                            <a key={link.name} href={link.href} className="text-gray-600 hover:text-purple-600 font-medium transition-colors duration-200 text-sm tracking-wide">
                                 {link.name}
                             </a>
                         ))}
@@ -225,7 +227,7 @@ const Header = () => {
 
 const Footer = () => {
     return (
-        <footer className="bg-[#110D25] text-gray-300 border-t border-purple-500/10 mt-20 relative z-20">
+        <footer className="bg-[#110D25] text-gray-300 border-t border-purple-500/10 relative z-20">
             <div className="max-w-7xl mx-auto py-16 px-4 sm:px-6 lg:px-8">
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8">
                     <div className="col-span-2 lg:col-span-2">
@@ -442,17 +444,11 @@ const ToolsPage = () => {
 
     return (
         <div className="relative pt-24 pb-24 overflow-x-hidden">
-             {/* Background from original file */}
-            <div className="absolute inset-0 z-0 pointer-events-none">
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-violet-200/50 to-transparent"></div>
-                <HexagonBackground />
-            </div>
-
             <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 z-10">
                 
                 {/* Search Header - Text color dark */}
                 <div className="text-center mb-16">
-                    <h1 className="text-4xl md:text-6xl font-bold text-gray-900 tracking-tighter mb-8">
+                    <h1 className="text-6xl md:text-8xl font-bold text-gray-900 tracking-tighter mb-8">
                         La Ruche
                     </h1>
                     <div className="max-w-xl mx-auto relative group">
@@ -517,9 +513,14 @@ const ToolsPage = () => {
 
 function App() {
   return (
-    <div className="bg-gray-50 text-gray-900 font-sans antialiased min-h-screen">
+    <div className="bg-gray-50 text-gray-900 font-sans antialiased min-h-screen relative">
+         {/* Background Moved Here to cover entire page including below footer if necessary */}
+         <div className="absolute inset-0 z-0 pointer-events-none fixed h-full w-full">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-violet-200/50 to-transparent"></div>
+            <HexagonBackground />
+        </div>
         <Header />
-        <main>
+        <main className="relative z-10">
             <ToolsPage />
         </main>
         <Footer />
