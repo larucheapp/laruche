@@ -1,0 +1,8 @@
+{
+  "name": "PurpleBee Bento Grid",
+  "description": "A futuristic, single-page all-in-one website featuring a dynamic bento-grid layout.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ]
+}
